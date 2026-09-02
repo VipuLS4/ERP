@@ -5,31 +5,30 @@ export const ROLE_ACCESS: Record<RoleKey, string[]> = {
   super_admin: [
     'dashboard', 'vendors', 'customers', 'purchases', 'material-receiving',
     'production', 'stock', 'sales', 'expenses', 'employees', 'salary',
-    'cash-bank', 'machines', 'reports', 'user-management', 'settings',
+    'reports', 'user-management', 'settings',
   ],
   plant_manager: [
-    'dashboard', 'material-receiving', 'production', 'stock', 'machines',
-    'reports',
+    'dashboard', 'material-receiving', 'production', 'stock', 'reports',
   ],
   production_supervisor: [
-    'production', 'machines', 'reports',
+    'production', 'stock', 'reports',
   ],
   store_employee: [
     'material-receiving', 'stock',
   ],
   purchase_employee: [
-    'vendors', 'purchases', 'reports',
+    'vendors', 'purchases', 'material-receiving', 'reports',
   ],
   sales_employee: [
     'customers', 'sales', 'reports',
   ],
   accountant: [
-    'vendors', 'customers', 'expenses', 'salary', 'cash-bank', 'reports',
+    'vendors', 'customers', 'purchases', 'expenses', 'salary', 'reports',
   ],
   viewer: [
     'dashboard', 'vendors', 'customers', 'purchases', 'material-receiving',
     'production', 'stock', 'sales', 'expenses', 'employees', 'salary',
-    'cash-bank', 'machines', 'reports',
+    'reports',
   ],
 };
 
@@ -51,7 +50,6 @@ export async function fetchUserProfile(userId: string) {
     .select('*, roles(*)')
     .eq('user_id', userId)
     .maybeSingle();
-
   if (error) return null;
   return data;
 }
@@ -87,7 +85,7 @@ export async function upsertUserProfile(userId: string, email: string) {
   });
 }
 
-export async function logAudit(action: string, module: string, transactionNumber?: string, details?: { previous?: Record<string, unknown>; new?: Record<string, unknown> }) {
+export async function logAudit(action: string, module: string, transactionNumber?: string) {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -104,19 +102,16 @@ export async function logAudit(action: string, module: string, transactionNumber
       action,
       module,
       transaction_number: transactionNumber || null,
-      previous_value: details?.previous || null,
-      new_value: details?.new || null,
     });
   } catch {
-    // audit logging is best-effort
+    // best-effort
   }
 }
 
-export async function generateTransactionNumber(table: string, prefix: string, numberField: string): Promise<string> {
+export async function generateTransactionNumber(table: string, prefix: string, _numberField?: string): Promise<string> {
   const { count } = await supabase
     .from(table)
     .select('*', { count: 'exact', head: true });
-
   const num = String((count || 0) + 1).padStart(5, '0');
   return `${prefix}-${num}`;
 }

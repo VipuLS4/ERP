@@ -1,6 +1,7 @@
 import { ReactNode, useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { canAccess, isReadOnly } from '../lib/auth';
+import type { LucideIcon } from 'lucide-react';
 import type { RoleKey } from '../lib/types';
 import {
   LayoutDashboard, Users, UserCircle, ShoppingCart, Package,
@@ -17,7 +18,7 @@ interface LayoutProps {
 interface MenuItem {
   id: string;
   label: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
+  icon: LucideIcon;
 }
 
 const ALL_MENU_ITEMS: MenuItem[] = [
@@ -31,7 +32,6 @@ const ALL_MENU_ITEMS: MenuItem[] = [
   { id: 'sales', label: 'Sales / Invoices', icon: Receipt },
   { id: 'expenses', label: 'Expenses', icon: DollarSign },
   { id: 'employees', label: 'Employees', icon: Wallet },
-  { id: 'salary', label: 'Salaries', icon: Wallet },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'user-management', label: 'User Management', icon: UserCog },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -70,11 +70,16 @@ export const Layout = ({ children, currentPage, onPageChange }: LayoutProps) => 
       <aside
         className={`${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 fixed lg:sticky top-0 left-0 z-40 w-64 h-screen bg-slate-900 text-white flex flex-col transition-transform duration-200`}
+        } lg:translate-x-0 fixed lg:sticky top-0 left-0 z-40 w-64 h-screen bg-[#102b1b] text-white flex flex-col transition-transform duration-200`}
       >
-        <div className="px-5 py-5 border-b border-slate-700">
-          <h1 className="text-lg font-bold tracking-tight">Raj & Brothers</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Rice Bran ERP</p>
+        <div className="px-5 py-4 border-b border-emerald-900/70 bg-[#102b1b]">
+          <div className="flex items-center gap-3">
+            <img src="/Logo_(3).png" alt="Raj & Brothers" className="h-12 w-12 rounded-xl object-cover bg-[#fff8e8]" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold tracking-tight text-[#fff8e8] truncate">Raj & Brothers</h1>
+              <p className="text-[11px] text-[#e8b44a] mt-0.5">Rice Bran ERP</p>
+            </div>
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
@@ -90,8 +95,8 @@ export const Layout = ({ children, currentPage, onPageChange }: LayoutProps) => 
                 }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
                   active
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-[#d49a2a] text-[#102b1b] shadow-sm'
+                    : 'text-slate-300 hover:bg-emerald-950 hover:text-[#fff8e8]'
                 }`}
               >
                 <Icon size={18} />
@@ -101,10 +106,10 @@ export const Layout = ({ children, currentPage, onPageChange }: LayoutProps) => 
           })}
         </nav>
 
-        <div className="px-3 py-3 border-t border-slate-700 space-y-2">
+        <div className="px-3 py-3 border-t border-emerald-900/70 space-y-2">
           <div className="px-3 py-2">
             <p className="text-sm font-medium text-white truncate">{profile?.name || 'User'}</p>
-            <p className="text-xs text-slate-400">{role ? ROLE_LABELS[role] : ''}</p>
+            <p className="text-xs text-[#e8b44a]/80">{role ? ROLE_LABELS[role] : ''}</p>
           </div>
           {readOnly && (
             <div className="px-3 py-1.5 text-xs text-amber-400 font-medium">
@@ -113,7 +118,7 @@ export const Layout = ({ children, currentPage, onPageChange }: LayoutProps) => 
           )}
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-300 hover:bg-red-500/10 transition"
           >
             <LogOut size={18} />
             <span>Sign Out</span>
@@ -130,7 +135,8 @@ export const Layout = ({ children, currentPage, onPageChange }: LayoutProps) => 
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 lg:px-6 py-3 flex items-center justify-between">
+        <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 lg:px-6 py-3 flex items-center justify-between relative">
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-forest-700 via-brand-300 to-forest-500" />
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -185,7 +191,7 @@ function GlobalSearch({ onPageChange, onClose }: { onPageChange: (page: string) 
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search modules..."
-          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-forest-600 outline-none"
         />
       </div>
       {query && (
@@ -194,7 +200,7 @@ function GlobalSearch({ onPageChange, onClose }: { onPageChange: (page: string) 
             <button
               key={item.id}
               onClick={() => { onPageChange(item.id); onClose(); }}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-blue-50 hover:text-blue-600 transition"
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg bg-gray-100 hover:bg-forest-50 hover:text-forest-700 transition"
             >
               <item.icon size={14} />
               {item.label}

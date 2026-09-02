@@ -59,13 +59,13 @@ export function FormField({ label, required, hint, children, className = '' }: F
   );
 }
 
-export const inputClass = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition';
+export const inputClass = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-forest-600 focus:border-forest-600 outline-none transition';
 
 export const buttonClass = {
-  primary: 'inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm',
-  secondary: 'inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium text-sm',
+  primary: 'inline-flex items-center gap-2 px-4 py-2 bg-forest-700 text-white rounded-lg hover:bg-forest-800 transition font-medium text-sm shadow-sm',
+  secondary: 'inline-flex items-center gap-2 px-4 py-2 bg-brand-100 text-forest-800 rounded-lg hover:bg-brand-200 transition font-medium text-sm',
   danger: 'inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium text-sm',
-  success: 'inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium text-sm',
+  success: 'inline-flex items-center gap-2 px-4 py-2 bg-forest-600 text-white rounded-lg hover:bg-forest-700 transition font-medium text-sm shadow-sm',
 };
 
 interface StatCardProps {

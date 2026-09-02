@@ -5,7 +5,7 @@ import { canAccess } from '../lib/auth';
 import type { RoleKey } from '../lib/types';
 import {
   TrendingUp, TrendingDown, Package, DollarSign, Users, Receipt,
-  Factory, AlertTriangle, Landmark, ArrowUpRight, ArrowDownRight,
+  Factory, AlertTriangle, Landmark, ArrowUpRight,
   ShoppingCart,
 } from 'lucide-react';
 import { StatCard } from './ui/Common';
@@ -191,8 +191,8 @@ export const Dashboard = () => {
               onClick={() => setDateFilter(btn.key)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${
                 dateFilter === btn.key
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-forest-700 text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-forest-50'
               }`}
             >
               {btn.label}

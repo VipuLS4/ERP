@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { canEdit } from '../lib/auth';
 import { logAudit, generateTransactionNumber } from '../lib/auth';
-import type { Purchase, Vendor, CashBankAccount } from '../lib/types';
+import type { Purchase, Vendor } from '../lib/types';
 import { Plus, Trash2 } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -12,15 +12,12 @@ import { PageHeader, Badge, FormField, inputClass, buttonClass } from './ui/Comm
 import { LoadingState, EmptyState } from './ui/States';
 import { useToast } from './ui/Toast';
 
-const PAYMENT_METHODS = ['Cash', 'Bank', 'UPI'];
-
 export const Purchases = () => {
   const { role } = useAuth();
   const { toast } = useToast();
   const editable = canEdit(role || undefined);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [accounts, setAccounts] = useState<CashBankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Purchase | null>(null);
@@ -34,7 +31,6 @@ export const Purchases = () => {
     vehicle_number: '',
     challan_number: '',
     number_of_bags: '',
-    payment_method: 'Cash',
     remarks: '',
   });
 
@@ -42,15 +38,13 @@ export const Purchases = () => {
 
   const loadData = async () => {
     try {
-      const [pRes, vRes, aRes] = await Promise.all([
+      const [pRes, vRes] = await Promise.all([
         supabase.from('purchases').select('*, vendors(name, vendor_id)').order('purchase_date', { ascending: false }),
         supabase.from('vendors').select('*').order('name'),
-        supabase.from('cash_bank_accounts').select('*').eq('is_active', true),
       ]);
       if (pRes.error) throw pRes.error;
       setPurchases(pRes.data || []);
       setVendors(vRes.data || []);
-      setAccounts(aRes.data || []);
     } catch (e) { console.error('Error loading data:', e); }
     finally { setLoading(false); }
   };
@@ -80,7 +74,7 @@ export const Purchases = () => {
         vehicle_number: formData.vehicle_number || null,
         challan_number: formData.challan_number || null,
         number_of_bags: formData.number_of_bags ? parseInt(formData.number_of_bags) : null,
-        payment_method: formData.payment_method,
+        payment_method: 'Direct',
         remarks: formData.remarks || null,
         status: 'Approved',
       }).select().single();
@@ -105,29 +99,6 @@ export const Purchases = () => {
         notes: `Purchase ${purchaseNumber}: ${quantity} Kg @ ₹${rate}/Kg`,
       });
 
-      // Cash/bank transaction if payment made
-      if (paymentMade > 0) {
-        const account = accounts.find(a => a.account_type === formData.payment_method) || accounts.find(a => a.account_type === 'Cash');
-        if (account) {
-          const newBalance = Number(account.current_balance) - paymentMade;
-          await supabase.from('cash_bank_accounts').update({ current_balance: newBalance }).eq('id', account.id);
-          await supabase.from('cash_bank_transactions').insert({
-            transaction_number: `VP-${Date.now()}`,
-            transaction_date: formData.purchase_date,
-            account_id: account.id,
-            account_name: account.account_name,
-            transaction_type: 'Vendor Payment',
-            module: 'Purchases',
-            reference_id: purchaseData.id,
-            reference_number: purchaseNumber,
-            amount: paymentMade,
-            direction: 'Debit',
-            balance_after: newBalance,
-            notes: `Payment for ${purchaseNumber}`,
-          });
-        }
-      }
-
       // Update stock
       const { data: stockData } = await supabase.from('stock').select('id, current_stock_kg').eq('product_name', 'Rice Bran').maybeSingle();
       if (stockData) {
@@ -150,7 +121,7 @@ export const Purchases = () => {
       await logAudit('Purchase created', 'Purchases', purchaseNumber);
       toast('Purchase created successfully', 'success');
       setShowForm(false);
-      setFormData({ purchase_date: new Date().toISOString().split('T')[0], vendor_id: '', quantity_kg: '', rate_per_kg: '', other_charges: '', payment_made: '', vehicle_number: '', challan_number: '', number_of_bags: '', payment_method: 'Cash', remarks: '' });
+      setFormData({ purchase_date: new Date().toISOString().split('T')[0], vendor_id: '', quantity_kg: '', rate_per_kg: '', other_charges: '', payment_made: '', vehicle_number: '', challan_number: '', number_of_bags: '', remarks: '' });
       loadData();
     } catch (e) { console.error('Error creating purchase:', e); toast('Error creating purchase', 'error'); }
   };
@@ -228,13 +199,8 @@ export const Purchases = () => {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Other Charges"><input type="number" step="0.01" value={formData.other_charges} onChange={(e) => setFormData({ ...formData, other_charges: e.target.value })} className={inputClass} placeholder="0.00" /></FormField>
-            <FormField label="Payment Method">
-              <select value={formData.payment_method} onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })} className={inputClass}>
-                {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </FormField>
+            <FormField label="Payment Made"><input type="number" step="0.01" value={formData.payment_made} onChange={(e) => setFormData({ ...formData, payment_made: e.target.value })} className={inputClass} placeholder="0.00" /></FormField>
           </div>
-          <FormField label="Payment Made"><input type="number" step="0.01" value={formData.payment_made} onChange={(e) => setFormData({ ...formData, payment_made: e.target.value })} className={inputClass} placeholder="0.00" /></FormField>
           <FormField label="Remarks"><input type="text" value={formData.remarks} onChange={(e) => setFormData({ ...formData, remarks: e.target.value })} className={inputClass} /></FormField>
 
           <div className="bg-blue-50 rounded-lg p-4 space-y-1.5 text-sm">
