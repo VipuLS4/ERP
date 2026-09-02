@@ -12,7 +12,6 @@ import { PageHeader, Badge, FormField, inputClass, buttonClass } from './ui/Comm
 import { LoadingState, EmptyState } from './ui/States';
 import { useToast } from './ui/Toast';
 
-const STATUSES = ['Draft', 'Started', 'In Process', 'Completed', 'Cancelled'];
 const SHIFTS = ['Morning', 'Afternoon', 'Night'];
 
 interface OutputRow {
@@ -80,7 +79,7 @@ export const Production = () => {
       const machine = machines.find(m => m.id === formData.machine_id);
       const rawMat = products.find(p => p.id === formData.raw_material_product_id);
 
-      const { data: batchData, error } = await supabase.from('production_batches').insert({
+      const { error } = await supabase.from('production_batches').insert({
         batch_number: batchNumber,
         batch_date: formData.batch_date,
         shift: formData.shift,
@@ -184,7 +183,6 @@ export const Production = () => {
 
       // Increase finished product stock
       for (const out of validOutputs) {
-        const product = products.find(p => p.id === out.product_id);
         const productName = out.product_name;
         const { data: existingStock } = await supabase.from('stock').select('id, current_stock_kg').eq('product_name', productName).maybeSingle();
         if (existingStock) {

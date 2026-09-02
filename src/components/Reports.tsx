@@ -124,7 +124,7 @@ export const Reports = () => {
   if (loading) return <LoadingState message="Loading reports..." />;
 
   const fmtINR = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-  const fmt = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+  const fmt = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
   const totalPurchases = purchases.reduce((s, p) => s + Number(p.total_amount), 0);
   const totalSales = sales.reduce((s, sl) => s + Number(sl.total_amount), 0);

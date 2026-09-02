@@ -29,7 +29,6 @@ export const Salary = () => {
   const [payments, setPayments] = useState<SalaryPayment[]>([]);
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'employees' | 'payments'>('employees');
 

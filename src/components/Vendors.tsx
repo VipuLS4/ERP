@@ -173,8 +173,6 @@ function VendorDetail({ vendor, onBack }: { vendor: Vendor; onBack: () => void }
       setReceipts(recs);
 
       const totalPurchase = purs.reduce((s, p) => s + Number(p.total_amount), 0);
-      const totalPaid = txs.filter(t => t.transaction_type === 'Payment' || t.transaction_type === 'Opening Balance' ? false : true).reduce((s, t) => s + Number(t.credit), 0)
-        + txs.filter(t => t.transaction_type === 'Payment').reduce((s, t) => s + Number(t.credit), 0);
       const totalBags = recs.reduce((s, r) => s + Number(r.number_of_bags || 0), 0);
       const totalKg = recs.reduce((s, r) => s + Number(r.net_weight), 0);
       const avgRate = totalKg > 0 ? totalPurchase / totalKg : 0;
