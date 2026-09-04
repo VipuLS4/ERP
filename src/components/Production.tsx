@@ -129,10 +129,17 @@ export const Production = () => {
   const lossPct = inputQty > 0 ? (wasteQty / inputQty) * 100 : 0;
   const exceedsInput = totalOutput > inputQty;
 
+  const isBalanced = inputQty > 0 && inputQty === totalOutput;
+  const unbalancedDiff = inputQty - totalOutput;
+
   const handleSaveOutputs = async () => {
     if (!selectedBatch) return;
     if (exceedsInput) {
       toast('Production output cannot exceed input quantity!', 'error');
+      return;
+    }
+    if (!isBalanced) {
+      toast(`Production not balanced! Difference: ${unbalancedDiff.toLocaleString('en-IN')} Kg. Input must equal total accounted quantity.`, 'error');
       return;
     }
 
@@ -412,7 +419,7 @@ export const Production = () => {
                 </div>
 
                 <div className="flex gap-3">
-                  <button onClick={handleSaveOutputs} disabled={exceedsInput} className={buttonClass.success + ' flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed'}>
+                  <button onClick={handleSaveOutputs} disabled={exceedsInput || !isBalanced} className={buttonClass.success + ' flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed'}>
                     <CheckCircle size={16} /> Complete Production
                   </button>
                   <button onClick={() => setShowOutputs(false)} className={buttonClass.secondary + ' flex-1 justify-center'}>Close</button>

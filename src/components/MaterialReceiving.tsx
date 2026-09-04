@@ -32,6 +32,7 @@ export const MaterialReceiving = () => {
     tare_weight: '',
     material_type: 'Rice Bran',
     product_id: '',
+    purchase_rate: '',
     received_by: '',
     remarks: '',
   });
@@ -53,6 +54,8 @@ export const MaterialReceiving = () => {
   };
 
   const netWeight = (parseFloat(formData.gross_weight) || 0) - (parseFloat(formData.tare_weight) || 0);
+  const purchaseRate = parseFloat(formData.purchase_rate) || 0;
+  const totalPurchaseValue = netWeight * purchaseRate;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,6 +81,8 @@ export const MaterialReceiving = () => {
         net_weight: net,
         material_type: productName,
         product_id: formData.product_id || null,
+        purchase_rate_per_kg: purchaseRate,
+        total_purchase_value: totalPurchaseValue,
         received_by: formData.received_by || null,
         remarks: formData.remarks || null,
         status: 'Received',
@@ -101,14 +106,14 @@ export const MaterialReceiving = () => {
           reference: 'Material Receiving',
           reference_id: receiptData.id,
           created_by: formData.received_by || null,
-          remarks: `Received ${net} Kg (Gross: ${gross}, Tare: ${tare})`,
+          remarks: `Received ${net} Kg @ ₹${purchaseRate}/Kg = ₹${totalPurchaseValue} (Gross: ${gross}, Tare: ${tare})`,
         });
       }
 
       await logAudit('Material received', 'Material Receiving', receiptNumber);
       toast('Material received successfully', 'success');
       setShowForm(false);
-      setFormData({ receipt_date: new Date().toISOString().split('T')[0], vendor_id: '', vehicle_number: '', challan_number: '', number_of_bags: '', gross_weight: '', tare_weight: '', material_type: 'Rice Bran', product_id: '', received_by: '', remarks: '' });
+      setFormData({ receipt_date: new Date().toISOString().split('T')[0], vendor_id: '', vehicle_number: '', challan_number: '', number_of_bags: '', gross_weight: '', tare_weight: '', material_type: 'Rice Bran', product_id: '', purchase_rate: '', received_by: '', remarks: '' });
       loadData();
     } catch (e) { console.error('Error creating receipt:', e); toast('Error creating receipt', 'error'); }
   };
@@ -116,14 +121,26 @@ export const MaterialReceiving = () => {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const { data: stockData } = await supabase.from('stock').select('current_stock_kg').eq('product_name', deleteTarget.material_type).maybeSingle();
+      const { data: stockData } = await supabase.from('stock').select('id, current_stock_kg').eq('product_name', deleteTarget.material_type).maybeSingle();
       if (stockData) {
-        const newStock = Number(stockData.current_stock_kg) - deleteTarget.net_weight;
-        await supabase.from('stock').update({ current_stock_kg: newStock, last_updated: new Date().toISOString() }).eq('product_name', deleteTarget.material_type);
+        const newStock = Number(stockData.current_stock_kg) - Number(deleteTarget.net_weight);
+        await supabase.from('stock').update({ current_stock_kg: newStock, last_updated: new Date().toISOString() }).eq('id', stockData.id);
+        await supabase.from('stock_movements').insert({
+          movement_date: new Date().toISOString().split('T')[0],
+          transaction_number: deleteTarget.receipt_number,
+          product_name: deleteTarget.material_type,
+          transaction_type: 'Material Reversal',
+          quantity_in: 0,
+          quantity_out: Number(deleteTarget.net_weight),
+          balance: newStock,
+          reference: 'Material Receiving',
+          reference_id: deleteTarget.id,
+          remarks: `Stock reversed from deleted receipt ${deleteTarget.receipt_number}`,
+        });
       }
       await supabase.from('material_receipts').delete().eq('id', deleteTarget.id);
       await logAudit('Material receipt deleted', 'Material Receiving', deleteTarget.receipt_number);
-      toast('Receipt deleted', 'success');
+      toast('Receipt deleted and stock reversed', 'success');
       loadData();
     } catch (e) { console.error('Error deleting receipt:', e); toast('Error deleting receipt', 'error'); }
     setDeleteTarget(null);
@@ -139,6 +156,8 @@ export const MaterialReceiving = () => {
     { key: 'gross_weight', header: 'Gross (Kg)', align: 'right', render: (r) => Number(r.gross_weight).toLocaleString('en-IN') },
     { key: 'tare_weight', header: 'Tare (Kg)', align: 'right', render: (r) => Number(r.tare_weight).toLocaleString('en-IN') },
     { key: 'net_weight', header: 'Net (Kg)', align: 'right', sortable: true, render: (r) => <span className="font-semibold">{Number(r.net_weight).toLocaleString('en-IN')}</span> },
+    { key: 'purchase_rate_per_kg', header: 'Rate/Kg', align: 'right', render: (r) => r.purchase_rate_per_kg ? `₹${Number(r.purchase_rate_per_kg).toLocaleString('en-IN')}` : '-' },
+    { key: 'total_purchase_value', header: 'Total Value', align: 'right', render: (r) => r.total_purchase_value ? `₹${Number(r.total_purchase_value).toLocaleString('en-IN')}` : '-' },
     { key: 'material_type', header: 'Material', render: (r) => <Badge text={r.material_type} color="blue" /> },
     { key: 'status', header: 'Status', align: 'center', render: (r) => <Badge text={r.status} color="green" /> },
     { key: 'actions', header: '', align: 'center', render: (r) => editable && <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(r); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button> },
@@ -183,15 +202,22 @@ export const MaterialReceiving = () => {
             </FormField>
           </div>
           <div className="grid grid-cols-2 gap-4">
+            <FormField label="Purchase Rate per Kg"><input type="number" step="0.01" value={formData.purchase_rate} onChange={(e) => setFormData({ ...formData, purchase_rate: e.target.value })} className={inputClass} /></FormField>
             <FormField label="Received By"><input type="text" value={formData.received_by} onChange={(e) => setFormData({ ...formData, received_by: e.target.value })} className={inputClass} /></FormField>
-            <FormField label="Remarks"><input type="text" value={formData.remarks} onChange={(e) => setFormData({ ...formData, remarks: e.target.value })} className={inputClass} /></FormField>
           </div>
+          <FormField label="Remarks"><input type="text" value={formData.remarks} onChange={(e) => setFormData({ ...formData, remarks: e.target.value })} className={inputClass} /></FormField>
 
-          <div className="bg-blue-50 rounded-lg p-4">
+          <div className="bg-blue-50 rounded-lg p-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Net Weight (Gross - Tare):</span>
               <span className="font-bold text-blue-600 text-lg">{netWeight.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Kg</span>
             </div>
+            {purchaseRate > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Total Purchase Value:</span>
+                <span className="font-bold text-green-600 text-lg">₹{totalPurchaseValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-2">

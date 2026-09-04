@@ -151,6 +151,8 @@ export interface MaterialReceipt {
   tare_weight: number;
   net_weight: number;
   material_type: string;
+  purchase_rate_per_kg: number;
+  total_purchase_value: number;
   received_by: string | null;
   remarks: string | null;
   status: string;

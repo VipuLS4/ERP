@@ -110,6 +110,28 @@ export const Reports = () => {
         data.salaries = salaries;
       }
 
+      if (reportType === 'material-receiving') {
+        let mrQuery = supabase.from('material_receipts').select('*, vendors(name)').gte('receipt_date', start).lte('receipt_date', end).order('receipt_date', { ascending: false });
+        if (selectedVendor) mrQuery = mrQuery.eq('vendor_id', selectedVendor);
+        const mrRes = await mrQuery;
+        data.materialReceipts = mrRes.data || [];
+      }
+
+      if (reportType === 'stock-ledger') {
+        let mvQuery = supabase.from('stock_movements').select('*').gte('movement_date', start).lte('movement_date', end).order('movement_date', { ascending: false });
+        const mvRes = await mvQuery;
+        data.ledgerMovements = mvRes.data || [];
+      }
+
+      if (reportType === 'customer-outstanding') {
+        const [sRes, cRes] = await Promise.all([
+          supabase.from('sales').select('*').gte('sale_date', start).lte('sale_date', end).order('sale_date', { ascending: false }),
+          supabase.from('customers').select('*').order('name'),
+        ]);
+        data.sales = sRes.data || [];
+        data.customers = cRes.data || [];
+      }
+
       if (reportType === 'profit-summary' || reportType === 'sales-report' || reportType === 'expense-report') {
         const [sRes, pRes, eRes] = await Promise.all([
           supabase.from('sales').select('*').gte('sale_date', start).lte('sale_date', end).order('sale_date', { ascending: false }),
@@ -161,12 +183,15 @@ export const Reports = () => {
   const reportTypes = [
     { value: 'vendor-ledger', label: 'Individual Vendor Ledger' },
     { value: 'rice-bran-procurement', label: 'Rice Bran Procurement Report' },
+    { value: 'material-receiving', label: 'Material Receiving Report' },
     { value: 'raw-rice-bran-stock', label: 'Raw Rice Bran Stock Report' },
     { value: 'daily-production', label: 'Daily Production Report' },
     { value: 'finished-stock', label: 'Finished Stock Report' },
+    { value: 'stock-ledger', label: 'Stock Ledger Report' },
     { value: 'salary-report', label: 'Salary Report' },
     { value: 'profit-summary', label: 'Profit Summary' },
     { value: 'sales-report', label: 'Sales Report' },
+    { value: 'customer-outstanding', label: 'Customer Outstanding Report' },
     { value: 'expense-report', label: 'Expense Report' },
   ];
 
@@ -174,7 +199,7 @@ export const Reports = () => {
     { key: 'today', label: 'Today' }, { key: 'week', label: 'Week' }, { key: 'month', label: 'Month' }, { key: 'year', label: 'Year' }, { key: 'all', label: 'All' },
   ];
 
-  const showVendorFilter = ['vendor-ledger', 'rice-bran-procurement'].includes(reportType);
+  const showVendorFilter = ['vendor-ledger', 'rice-bran-procurement', 'material-receiving'].includes(reportType);
   const showEmployeeFilter = reportType === 'salary-report';
   const showStatusFilter = reportType === 'daily-production';
 
@@ -278,6 +303,51 @@ export const Reports = () => {
           rows,
           fileName: 'Raj_Brothers_Salary_Report.pdf',
           summaryRows: [{ label: 'Total Net Salary', value: fmtINR(totalNet) }, { label: 'Total Released', value: fmtINR(totalReleased) }, { label: 'Total Balance', value: fmtINR(totalBalance) }],
+        };
+      }
+      case 'material-receiving': {
+        const receipts = reportData.materialReceipts || [];
+        const rows = receipts.map((r: any) => [new Date(r.receipt_date).toLocaleDateString(), r.vendor_name || '-', r.receipt_number, r.vehicle_number || '-', r.challan_number || '-', r.number_of_bags || 0, fmt(Number(r.net_weight)), r.purchase_rate_per_kg ? `₹${Number(r.purchase_rate_per_kg).toLocaleString('en-IN')}` : '-', r.total_purchase_value ? fmtINR(Number(r.total_purchase_value)) : '-']);
+        const totalBags = receipts.reduce((s: number, r: any) => s + Number(r.number_of_bags || 0), 0);
+        const totalKg = receipts.reduce((s: number, r: any) => s + Number(r.net_weight), 0);
+        const totalValue = receipts.reduce((s: number, r: any) => s + Number(r.total_purchase_value || 0), 0);
+        return {
+          title: 'Material Receiving Report',
+          columns: ['Date', 'Vendor', 'Receipt #', 'Vehicle', 'Challan', 'Bags', 'Net (Kg)', 'Rate/Kg', 'Total Value'],
+          rows,
+          fileName: 'Raj_Brothers_Material_Receiving_Report.pdf',
+          landscape: true,
+          summaryRows: [{ label: 'Total Bags', value: String(totalBags) }, { label: 'Total Rice Bran Received', value: `${fmt(totalKg)} Kg` }, { label: 'Total Purchase Value', value: fmtINR(totalValue) }],
+        };
+      }
+      case 'stock-ledger': {
+        const movements = reportData.ledgerMovements || [];
+        const rows = movements.map((m: any) => [new Date(m.movement_date).toLocaleDateString(), m.transaction_number || '-', m.product_name, m.transaction_type, Number(m.quantity_in) > 0 ? fmt(Number(m.quantity_in)) : '-', Number(m.quantity_out) > 0 ? fmt(Number(m.quantity_out)) : '-', fmt(Number(m.balance))]);
+        const totalIn = movements.reduce((s: number, m: any) => s + Number(m.quantity_in), 0);
+        const totalOut = movements.reduce((s: number, m: any) => s + Number(m.quantity_out), 0);
+        return {
+          title: 'Stock Ledger Report',
+          columns: ['Date', 'Reference', 'Product', 'Transaction', 'Qty In', 'Qty Out', 'Running Balance'],
+          rows,
+          fileName: 'Raj_Brothers_Stock_Ledger_Report.pdf',
+          landscape: true,
+          summaryRows: [{ label: 'Total Movements', value: String(movements.length) }, { label: 'Total Qty In', value: `${fmt(totalIn)} Kg` }, { label: 'Total Qty Out', value: `${fmt(totalOut)} Kg` }],
+        };
+      }
+      case 'customer-outstanding': {
+        const sales = reportData.sales || [];
+        const customers = reportData.customers || [];
+        const rows = sales.map((s: any) => [s.invoice_number, new Date(s.sale_date).toLocaleDateString(), s.customer_name, s.product_name, fmt(Number(s.quantity_kg)), fmtINR(Number(s.total_amount)), fmtINR(Number(s.payment_received)), fmtINR(Number(s.outstanding_balance))]);
+        const totalInvoice = sales.reduce((s: number, sl: any) => s + Number(sl.total_amount), 0);
+        const totalReceived = sales.reduce((s: number, sl: any) => s + Number(sl.payment_received), 0);
+        const totalOutstanding = sales.reduce((s: number, sl: any) => s + Number(sl.outstanding_balance), 0);
+        return {
+          title: 'Customer Outstanding Report',
+          columns: ['Invoice #', 'Date', 'Customer', 'Product', 'Qty (Kg)', 'Invoice Value', 'Received', 'Outstanding'],
+          rows,
+          fileName: 'Raj_Brothers_Customer_Outstanding_Report.pdf',
+          landscape: true,
+          summaryRows: [{ label: 'Total Invoice Value', value: fmtINR(totalInvoice) }, { label: 'Total Received', value: fmtINR(totalReceived) }, { label: 'Total Outstanding', value: fmtINR(totalOutstanding) }],
         };
       }
       case 'profit-summary': {

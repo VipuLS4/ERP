@@ -53,6 +53,7 @@ export const Dashboard = () => {
   });
   const [salesTrend, setSalesTrend] = useState<{ date: string; amount: number }[]>([]);
   const [purchaseTrend, setPurchaseTrend] = useState<{ date: string; amount: number }[]>([]);
+  const [stockByProduct, setStockByProduct] = useState<{ product_name: string; current_stock_kg: number; product_type: string }[]>([]);
   const [lowStockAlerts, setLowStockAlerts] = useState<{ product_name: string; current_stock_kg: number; minimum_stock_kg: number }[]>([]);
 
   const dateRange = useMemo(() => {
@@ -93,7 +94,7 @@ export const Dashboard = () => {
         supabase.from('sales').select('sale_date, total_amount, quantity_kg').gte('sale_date', dateRange.start).lte('sale_date', dateRange.end),
         supabase.from('plant_expenses').select('expense_date, amount').gte('expense_date', dateRange.start).lte('expense_date', dateRange.end),
         supabase.from('salary_payments').select('amount_paid'),
-        supabase.from('stock').select('current_stock_kg'),
+        supabase.from('stock').select('product_name, current_stock_kg, minimum_stock_kg, products(product_type)'),
         supabase.from('vendors').select('id, balance'),
         supabase.from('customers').select('id, balance'),
         supabase.from('cash_bank_accounts').select('account_name, account_type, current_balance'),
@@ -106,6 +107,8 @@ export const Dashboard = () => {
       const totalExpenses = expensesRes.data?.reduce((s, p) => s + Number(p.amount), 0) || 0;
       const totalSalaries = salariesRes.data?.reduce((s, p) => s + Number(p.amount_paid), 0) || 0;
       const currentStock = stockRes.data?.reduce((s, p) => s + Number(p.current_stock_kg), 0) || 0;
+      const stockList = (stockRes.data || []).map((s: any) => ({ product_name: s.product_name, current_stock_kg: Number(s.current_stock_kg), product_type: s.products?.product_type || 'Finished Product' }));
+      setStockByProduct(stockList);
       const netProfit = totalSales - totalPurchases - totalExpenses - totalSalaries;
       const vendorPayables = vendorsRes.data?.reduce((s, v) => s + Number(v.balance), 0) || 0;
       const customerReceivables = customersRes.data?.reduce((s, c) => s + Number(c.balance), 0) || 0;
@@ -295,6 +298,25 @@ export const Dashboard = () => {
               <div className="flex justify-between"><span className="text-gray-500">Salaries</span><span className="font-semibold text-red-600">- ₹{fmt(stats.totalSalaries)}</span></div>
               <div className="flex justify-between border-t pt-2"><span className="font-bold text-gray-900">Net Profit</span><span className={`font-bold ${stats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>₹{fmt(stats.netProfit)}</span></div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inventory Summary - Individual Products */}
+      {showStore && stockByProduct.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Package size={18} className="text-forest-700" />
+            <h3 className="text-sm font-semibold text-gray-900">Current Inventory</h3>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {stockByProduct.filter(s => ['Raw Material', 'Finished Product', 'By-product'].includes(s.product_type)).map((s, i) => (
+              <div key={i} className={`rounded-lg p-4 border-l-4 ${s.product_type === 'Raw Material' ? 'bg-amber-50 border-l-amber-500' : 'bg-forest-50 border-l-forest-600'}`}>
+                <p className="text-xs text-gray-500 mb-1">{s.product_type === 'Raw Material' ? 'Raw Material' : 'Finished Product'}</p>
+                <p className="font-bold text-gray-900 text-sm mb-1">{s.product_name}</p>
+                <p className="text-2xl font-bold text-gray-900">{fmt(s.current_stock_kg)} <span className="text-sm font-normal text-gray-500">Kg</span></p>
+              </div>
+            ))}
           </div>
         </div>
       )}
