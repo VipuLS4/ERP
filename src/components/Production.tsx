@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { canEdit } from '../lib/auth';
 import { logAudit, generateTransactionNumber } from '../lib/auth';
 import type { ProductionBatch, ProductionOutput, Machine, Product, StockItem } from '../lib/types';
-import { Plus, Trash2, Eye, Play, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Eye, Play, CheckCircle, XCircle, AlertCircle, ArrowRight, Package } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { DataTable, type Column } from './ui/DataTable';
@@ -99,10 +99,13 @@ export const Production = () => {
       if (error) throw error;
 
       await logAudit('Production batch created', 'Production', batchNumber);
-      toast('Production batch created', 'success');
+      toast('Production batch created. Now enter finished product quantities.', 'success');
       setShowForm(false);
       setFormData({ batch_date: new Date().toISOString().split('T')[0], shift: 'Morning', supervisor: '', operator: '', machine_id: '', raw_material_product_id: '', input_quantity_kg: '', start_time: '', end_time: '', remarks: '' });
-      loadData();
+      await loadData();
+      // Auto-open the output entry modal for the newly created batch
+      const { data: newBatch } = await supabase.from('production_batches').select('*').eq('batch_number', batchNumber).single();
+      if (newBatch) openOutputs(newBatch);
     } catch (e) { console.error('Error creating batch:', e); toast('Error creating batch', 'error'); }
   };
 
@@ -284,18 +287,31 @@ export const Production = () => {
     { key: 'yield_percent', header: 'Yield %', align: 'right', render: (b) => b.yield_percent ? `${Number(b.yield_percent).toFixed(1)}%` : '-' },
     { key: 'waste_kg', header: 'Waste (Kg)', align: 'right', render: (b) => b.waste_kg ? Number(b.waste_kg).toLocaleString('en-IN') : '-' },
     { key: 'machine_name', header: 'Machine', render: (b) => b.machine_name || '-' },
-    { key: 'status', header: 'Status', align: 'center', render: (b) => <Badge text={b.status} color={statusColor(b.status) as 'green' | 'blue' | 'amber' | 'red' | 'gray'} /> },
+    { key: 'status', header: 'Status', align: 'center', render: (b) => {
+      const isPending = b.status === 'Started' && !b.total_output_kg;
+      return (
+        <div className="flex flex-col items-center gap-1">
+          <Badge text={b.status} color={statusColor(b.status) as 'green' | 'blue' | 'amber' | 'red' | 'gray'} />
+          {isPending && <span className="text-xs text-amber-600 font-medium">Output Pending</span>}
+        </div>
+      );
+    } },
     {
       key: 'actions', header: 'Actions', align: 'center',
-      render: (b) => (
-        <div className="flex items-center justify-center gap-1">
-          {editable && b.status !== 'Completed' && b.status !== 'Cancelled' && (
-            <button onClick={(e) => { e.stopPropagation(); openOutputs(b); }} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition" title="Enter Output"><Play size={16} /></button>
-          )}
-          <button onClick={(e) => { e.stopPropagation(); openOutputs(b); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="View Details"><Eye size={16} /></button>
-          {editable && <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(b); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button>}
-        </div>
-      ),
+      render: (b) => {
+        const isPending = b.status === 'Started' && !b.total_output_kg;
+        return (
+          <div className="flex items-center justify-center gap-1">
+            {editable && b.status !== 'Completed' && b.status !== 'Cancelled' && (
+              <button onClick={(e) => { e.stopPropagation(); openOutputs(b); }} className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${isPending ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 animate-pulse' : 'text-green-600 hover:bg-green-50'}`} title="Enter Finished Product Output">
+                {isPending ? <><Package size={14} /> Enter Output</> : <><Play size={14} /> Edit Output</>}
+              </button>
+            )}
+            <button onClick={(e) => { e.stopPropagation(); openOutputs(b); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="View Details"><Eye size={16} /></button>
+            {editable && <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(b); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button>}
+          </div>
+        );
+      },
     },
   ];
 
@@ -310,6 +326,26 @@ export const Production = () => {
       />
 
       {batches.length === 0 ? <EmptyState message="No production batches found. Create your first batch!" /> : <DataTable columns={columns} data={batches} searchKeys={['batch_number', 'supervisor', 'operator', 'machine_name']} searchPlaceholder="Search batches..." />}
+
+      {/* Workflow Guide */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-4">
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-2 text-blue-700 font-medium">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold">1</span>
+            Create Batch (Raw Material Input)
+          </div>
+          <ArrowRight size={16} className="text-blue-400" />
+          <div className="flex items-center gap-2 text-blue-700 font-medium">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold">2</span>
+            Enter Finished Product Quantities
+          </div>
+          <ArrowRight size={16} className="text-blue-400" />
+          <div className="flex items-center gap-2 text-blue-700 font-medium">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-green-600 text-white text-xs font-bold">3</span>
+            Complete Production (Stock Updates)
+          </div>
+        </div>
+      </div>
 
       {/* New Batch Form */}
       <Modal open={showForm} onClose={() => setShowForm(false)} title="New Production Batch" size="lg">
@@ -354,7 +390,7 @@ export const Production = () => {
       </Modal>
 
       {/* Production Output Modal */}
-      <Modal open={showOutputs} onClose={() => setShowOutputs(false)} title={`${selectedBatch?.batch_number} — Production Output`} size="lg">
+      <Modal open={showOutputs} onClose={() => setShowOutputs(false)} title={`${selectedBatch?.batch_number} — Finished Product Output Entry`} size="lg">
         {selectedBatch && (
           <div className="space-y-4">
             <div className="grid grid-cols-4 gap-3">
@@ -367,7 +403,10 @@ export const Production = () => {
             {selectedBatch.status !== 'Completed' && editable ? (
               <>
                 <div className="space-y-3">
-                  <p className="text-sm font-medium text-gray-700">Enter actual production output:</p>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2">
+                    <Package size={18} className="text-amber-600" />
+                    <p className="text-sm font-medium text-amber-700">Step 2: Enter the actual quantity produced for each finished product below. All quantities must add up to the input quantity.</p>
+                  </div>
                   {outputRows.map((row, idx) => (
                     <div key={idx} className="flex items-center gap-3">
                       <div className="flex-1">
