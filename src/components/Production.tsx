@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { canEdit } from '../lib/auth';
 import { logAudit, generateTransactionNumber } from '../lib/auth';
 import type { ProductionBatch, ProductionOutput, Machine, Product, StockItem } from '../lib/types';
-import { Plus, Trash2, Eye, Play, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Trash2, Eye, Play, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { DataTable, type Column } from './ui/DataTable';
@@ -137,6 +137,25 @@ export const Production = () => {
     }
 
     try {
+      // Prevent duplicate stock movements: if batch was already completed, reverse previous movements first
+      const wasCompleted = selectedBatch.status === 'Completed';
+
+      if (wasCompleted) {
+        // Reverse previous stock movements for this batch
+        const { data: prevMovements } = await supabase.from('stock_movements').select('*').eq('reference_id', selectedBatch.id).eq('reference', 'Production Batch');
+        if (prevMovements && prevMovements.length > 0) {
+          for (const m of prevMovements) {
+            const stockItem = stockItems.find(s => s.product_name === m.product_name);
+            if (stockItem) {
+              const reversal = Number(m.quantity_out) - Number(m.quantity_in);
+              const restoredStock = Number(stockItem.current_stock_kg) + reversal;
+              await supabase.from('stock').update({ current_stock_kg: restoredStock, last_updated: new Date().toISOString() }).eq('id', stockItem.id);
+            }
+          }
+          await supabase.from('stock_movements').delete().eq('reference_id', selectedBatch.id).eq('reference', 'Production Batch');
+        }
+      }
+
       // Delete existing outputs
       await supabase.from('production_outputs').delete().eq('batch_id', selectedBatch.id);
 
@@ -170,6 +189,7 @@ export const Production = () => {
         await supabase.from('stock_movements').insert({
           movement_date: selectedBatch.batch_date,
           transaction_number: selectedBatch.batch_number,
+          product_id: selectedBatch.raw_material_product_id || null,
           product_name: selectedBatch.raw_material_name,
           transaction_type: 'Production',
           quantity_in: 0,
@@ -191,6 +211,7 @@ export const Production = () => {
           await supabase.from('stock_movements').insert({
             movement_date: selectedBatch.batch_date,
             transaction_number: selectedBatch.batch_number,
+            product_id: out.product_id || null,
             product_name: productName,
             transaction_type: 'Production',
             quantity_in: parseFloat(out.quantity),
@@ -213,10 +234,24 @@ export const Production = () => {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
+      if (deleteTarget.status === 'Completed') {
+        const { data: prevMovements } = await supabase.from('stock_movements').select('*').eq('reference_id', deleteTarget.id).eq('reference', 'Production Batch');
+        if (prevMovements && prevMovements.length > 0) {
+          for (const m of prevMovements) {
+            const { data: stockItem } = await supabase.from('stock').select('id, current_stock_kg').eq('product_name', m.product_name).maybeSingle();
+            if (stockItem) {
+              const reversal = Number(m.quantity_out) - Number(m.quantity_in);
+              const restoredStock = Number(stockItem.current_stock_kg) + reversal;
+              await supabase.from('stock').update({ current_stock_kg: restoredStock, last_updated: new Date().toISOString() }).eq('id', stockItem.id);
+            }
+          }
+          await supabase.from('stock_movements').delete().eq('reference_id', deleteTarget.id).eq('reference', 'Production Batch');
+        }
+      }
       await supabase.from('production_outputs').delete().eq('batch_id', deleteTarget.id);
       await supabase.from('production_batches').delete().eq('id', deleteTarget.id);
       await logAudit('Production batch deleted', 'Production', deleteTarget.batch_number);
-      toast('Batch deleted', 'success');
+      toast('Batch deleted and stock reversed', 'success');
       loadData();
     } catch (e) { console.error('Error deleting batch:', e); toast('Error deleting batch', 'error'); }
     setDeleteTarget(null);
@@ -355,13 +390,23 @@ export const Production = () => {
                       <p className="text-sm font-medium">Production output cannot exceed input quantity!</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="flex justify-between"><span className="text-gray-600">Total Output:</span><span className="font-bold">{totalOutput.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Kg</span></div>
-                      <div className="flex justify-between"><span className="text-gray-600">Saleable Output:</span><span className="font-bold text-green-600">{saleableOutput.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Kg</span></div>
-                      <div className="flex justify-between"><span className="text-gray-600">Waste:</span><span className="font-bold text-red-600">{wasteQty.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Kg</span></div>
-                      <div className="flex justify-between"><span className="text-gray-600">Balance:</span><span className="font-bold">{(inputQty - totalOutput).toLocaleString('en-IN', { maximumFractionDigits: 2 })} Kg</span></div>
-                      <div className="flex justify-between"><span className="text-gray-600">Yield %:</span><span className="font-bold text-green-600">{yieldPct.toFixed(1)}%</span></div>
-                      <div className="flex justify-between"><span className="text-gray-600">Process Loss %:</span><span className="font-bold text-red-600">{lossPct.toFixed(1)}%</span></div>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="flex justify-between"><span className="text-gray-600">Total Output:</span><span className="font-bold">{totalOutput.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Kg</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Saleable Output:</span><span className="font-bold text-green-600">{saleableOutput.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Kg</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Waste:</span><span className="font-bold text-red-600">{wasteQty.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Kg</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Balance:</span><span className="font-bold">{(inputQty - totalOutput).toLocaleString('en-IN', { maximumFractionDigits: 2 })} Kg</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Yield %:</span><span className="font-bold text-green-600">{yieldPct.toFixed(1)}%</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Process Loss %:</span><span className="font-bold text-red-600">{lossPct.toFixed(1)}%</span></div>
+                      </div>
+                      <div className={`flex items-center gap-2 rounded-lg px-3 py-2 ${inputQty - totalOutput === 0 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {inputQty - totalOutput === 0 ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                        <span className="text-sm font-medium">
+                          {inputQty - totalOutput === 0
+                            ? `Production Balanced — Input (${inputQty.toLocaleString('en-IN')} Kg) = Total Accounted (${totalOutput.toLocaleString('en-IN')} Kg)`
+                            : `Unbalanced — Difference: ${(inputQty - totalOutput).toLocaleString('en-IN')} Kg (Input: ${inputQty.toLocaleString('en-IN')} Kg, Accounted: ${totalOutput.toLocaleString('en-IN')} Kg)`}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>

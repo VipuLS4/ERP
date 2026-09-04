@@ -1,197 +1,202 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Package, TrendingUp, TrendingDown } from 'lucide-react';
+import { Package, TrendingUp, TrendingDown, Layers, Scale } from 'lucide-react';
+import { PageHeader, Badge } from './ui/Common';
+import { LoadingState, EmptyState } from './ui/States';
+import { DataTable, type Column } from './ui/DataTable';
+import type { StockItem, StockMovement } from '../lib/types';
 
-interface StockData {
-  current_stock_kg: number;
-  last_updated: string;
-}
-
-interface StockMovement {
-  type: 'purchase' | 'sale';
-  date: string;
-  quantity: number;
-  rate: number;
-  amount: number;
+interface ProductStockSummary {
+  product_name: string;
+  product_type: string;
+  opening_stock: number;
+  received: number;
+  produced: number;
+  sold: number;
+  consumed: number;
+  adjusted: number;
+  current_stock: number;
 }
 
 export const Stock = () => {
-  const [stock, setStock] = useState<StockData | null>(null);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [summaries, setSummaries] = useState<ProductStockSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalPurchased, setTotalPurchased] = useState(0);
-  const [totalSold, setTotalSold] = useState(0);
+  const [activeTab, setActiveTab] = useState<'overview' | 'raw-material' | 'finished' | 'ledger'>('overview');
 
-  useEffect(() => {
-    loadStockData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
-  const loadStockData = async () => {
+  const loadData = async () => {
     try {
-      const [stockRes, purchasesRes, salesRes] = await Promise.all([
-        supabase.from('stock').select('*').eq('product_name', 'Rice Bran').single(),
-        supabase.from('purchases').select('purchase_date, quantity_kg, rate_per_kg, total_amount').order('purchase_date', { ascending: false }),
-        supabase.from('sales').select('sale_date, quantity_kg, rate_per_kg, total_amount').order('sale_date', { ascending: false }),
+      const [stRes, mvRes, pRes] = await Promise.all([
+        supabase.from('stock').select('*, products!inner(product_type)').order('product_name'),
+        supabase.from('stock_movements').select('*').order('movement_date', { ascending: false }).limit(200),
+        supabase.from('products').select('*'),
       ]);
 
-      if (stockRes.data) {
-        setStock(stockRes.data);
-      }
+      setStockItems(stRes.data || []);
+      setMovements(mvRes.data || []);
 
-      const movementList: StockMovement[] = [];
-
-      if (purchasesRes.data) {
-        const totalPurch = purchasesRes.data.reduce((sum, p) => sum + Number(p.quantity_kg), 0);
-        setTotalPurchased(totalPurch);
-        purchasesRes.data.forEach((p) => {
-          movementList.push({
-            type: 'purchase',
-            date: p.purchase_date,
-            quantity: Number(p.quantity_kg),
-            rate: Number(p.rate_per_kg),
-            amount: Number(p.total_amount),
-          });
-        });
-      }
-
-      if (salesRes.data) {
-        const totalSld = salesRes.data.reduce((sum, s) => sum + Number(s.quantity_kg), 0);
-        setTotalSold(totalSld);
-        salesRes.data.forEach((s) => {
-          movementList.push({
-            type: 'sale',
-            date: s.sale_date,
-            quantity: Number(s.quantity_kg),
-            rate: Number(s.rate_per_kg),
-            amount: Number(s.total_amount),
-          });
-        });
-      }
-
-      movementList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setMovements(movementList);
-    } catch (error) {
-      console.error('Error loading stock data:', error);
-    } finally {
-      setLoading(false);
-    }
+      const productList = pRes.data || [];
+      const summaries: ProductStockSummary[] = productList.map(p => {
+        const stock = (stRes.data || []).find(s => s.product_id === p.id || s.product_name === p.name);
+        const productMovements = (mvRes.data || []).filter(m => m.product_name === p.name);
+        const opening = Number(stock?.opening_stock_kg || 0);
+        const received = productMovements.filter(m => m.transaction_type === 'Material Receiving').reduce((s, m) => s + Number(m.quantity_in), 0);
+        const produced = productMovements.filter(m => m.transaction_type === 'Production').reduce((s, m) => s + Number(m.quantity_in), 0);
+        const sold = productMovements.filter(m => m.transaction_type === 'Sale').reduce((s, m) => s + Number(m.quantity_out), 0);
+        const consumed = productMovements.filter(m => m.transaction_type === 'Production').reduce((s, m) => s + Number(m.quantity_out), 0);
+        const adjusted = productMovements.filter(m => m.transaction_type === 'Stock Adjustment' || m.transaction_type === 'Sale Reversal').reduce((s, m) => s + Number(m.quantity_in) - Number(m.quantity_out), 0);
+        const current = Number(stock?.current_stock_kg || 0);
+        return {
+          product_name: p.name,
+          product_type: p.product_type,
+          opening_stock: opening,
+          received,
+          produced,
+          sold,
+          consumed,
+          adjusted,
+          current_stock: current,
+        };
+      });
+      setSummaries(summaries);
+    } catch (e) { console.error('Error loading stock data:', e); }
+    finally { setLoading(false); }
   };
 
-  if (loading) {
-    return <div className="text-center py-8">Loading stock data...</div>;
-  }
+  if (loading) return <LoadingState message="Loading stock data..." />;
 
-  const currentStock = stock?.current_stock_kg || 0;
+  const fmt = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
+  const rawMaterialSummary = summaries.filter(s => s.product_type === 'Raw Material');
+  const finishedSummary = summaries.filter(s => s.product_type === 'Finished Product' || s.product_type === 'By-product');
+
+  const ledgerColumns: Column<StockMovement>[] = [
+    { key: 'movement_date', header: 'Date', sortable: true, render: (m) => new Date(m.movement_date).toLocaleDateString() },
+    { key: 'transaction_number', header: 'Reference', render: (m) => m.transaction_number || '-' },
+    { key: 'product_name', header: 'Product', render: (m) => <Badge text={m.product_name} color="blue" /> },
+    { key: 'transaction_type', header: 'Transaction', render: (m) => <Badge text={m.transaction_type} color={m.transaction_type === 'Sale' ? 'red' : m.transaction_type === 'Production' ? 'amber' : m.transaction_type === 'Material Receiving' ? 'green' : 'gray'} /> },
+    { key: 'quantity_in', header: 'Qty In', align: 'right', render: (m) => Number(m.quantity_in) > 0 ? <span className="text-green-600 font-medium">+{fmt(Number(m.quantity_in))}</span> : '-' },
+    { key: 'quantity_out', header: 'Qty Out', align: 'right', render: (m) => Number(m.quantity_out) > 0 ? <span className="text-red-600 font-medium">-{fmt(Number(m.quantity_out))}</span> : '-' },
+    { key: 'balance', header: 'Running Balance', align: 'right', render: (m) => <span className="font-semibold">{fmt(Number(m.balance))} Kg</span> },
+    { key: 'remarks', header: 'Remarks', render: (m) => m.remarks || '-' },
+  ];
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Stock Management</h1>
+      <PageHeader title="Stock & Inventory" subtitle="Raw material and finished product inventory" />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Current Stock</p>
-              <p className="text-3xl font-bold text-gray-900">{currentStock.toLocaleString('en-IN')} Kg</p>
-            </div>
-            <Package size={40} className="text-blue-500 opacity-20" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Purchased</p>
-              <p className="text-3xl font-bold text-green-600">{totalPurchased.toLocaleString('en-IN')} Kg</p>
-            </div>
-            <TrendingUp size={40} className="text-green-500 opacity-20" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Sold</p>
-              <p className="text-3xl font-bold text-red-600">{totalSold.toLocaleString('en-IN')} Kg</p>
-            </div>
-            <TrendingDown size={40} className="text-red-500 opacity-20" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
-          <div>
-            <p className="text-sm text-gray-600 mb-1">Last Updated</p>
-            <p className="text-lg font-semibold text-gray-900">
-              {stock?.last_updated ? new Date(stock.last_updated).toLocaleDateString() : 'N/A'}
-            </p>
-          </div>
-        </div>
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {([
+          { key: 'overview', label: 'Overview' },
+          { key: 'raw-material', label: 'Raw Material (Rice Bran)' },
+          { key: 'finished', label: 'Finished Products' },
+          { key: 'ledger', label: 'Stock Ledger' },
+        ] as const).map(tab => (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === tab.key ? 'bg-forest-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Stock Formula</h2>
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center gap-4 py-2">
-            <span className="text-gray-600">Opening Stock:</span>
-            <span className="font-semibold">0 Kg</span>
-          </div>
-          <div className="flex items-center gap-4 py-2">
-            <span className="text-gray-600">+ Total Purchases:</span>
-            <span className="font-semibold text-green-600">+ {totalPurchased.toLocaleString('en-IN')} Kg</span>
-          </div>
-          <div className="border-t-2 border-gray-300 pt-2 flex items-center gap-4 py-2">
-            <span className="text-gray-600">- Total Sales:</span>
-            <span className="font-semibold text-red-600">- {totalSold.toLocaleString('en-IN')} Kg</span>
-          </div>
-          <div className="border-t-2 border-blue-300 pt-2 flex items-center gap-4 py-3 bg-blue-50 px-4 rounded-lg mt-2">
-            <span className="text-gray-900 font-bold">= Current Stock:</span>
-            <span className="font-bold text-2xl text-blue-600">{currentStock.toLocaleString('en-IN')} Kg</span>
-          </div>
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {stockItems.map(item => {
+            const summary = summaries.find(s => s.product_name === item.product_name);
+            const isRaw = summary?.product_type === 'Raw Material';
+            return (
+              <div key={item.id} className={`bg-white rounded-xl shadow-sm border border-gray-100 p-5 border-l-4 ${isRaw ? 'border-l-amber-500' : 'border-l-forest-600'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="font-bold text-gray-900">{item.product_name}</h3>
+                    <p className="text-xs text-gray-500">{isRaw ? 'Raw Material' : 'Finished Product'}</p>
+                  </div>
+                  <div className={`p-2 rounded-lg ${isRaw ? 'bg-amber-50 text-amber-600' : 'bg-forest-50 text-forest-700'}`}>
+                    {isRaw ? <Layers size={24} /> : <Package size={24} />}
+                  </div>
+                </div>
+                <div className="text-3xl font-bold text-gray-900 mb-2">{fmt(Number(item.current_stock_kg))} <span className="text-base font-normal text-gray-500">Kg</span></div>
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <span>Min: {fmt(Number(item.minimum_stock_kg))} Kg</span>
+                  <span>Opening: {fmt(Number(item.opening_stock_kg))} Kg</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </div>
+      )}
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-bold text-gray-900">Stock Movements</h2>
+      {activeTab === 'raw-material' && (
+        <div className="space-y-6">
+          {rawMaterialSummary.map(s => (
+            <div key={s.product_name} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-5 border-b bg-amber-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{s.product_name}</h2>
+                    <p className="text-sm text-gray-500">Raw Material Inventory</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500">Current Available Stock</p>
+                    <p className="text-3xl font-bold text-amber-600">{fmt(s.current_stock)} <span className="text-base font-normal text-gray-500">Kg</span></p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Stock Calculation</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between py-2 border-b"><span className="text-gray-600">Opening Stock</span><span className="font-medium">{fmt(s.opening_stock)} Kg</span></div>
+                  <div className="flex justify-between py-2 border-b"><span className="text-gray-600">+ Material Received</span><span className="font-medium text-green-600">+ {fmt(s.received)} Kg</span></div>
+                  <div className="flex justify-between py-2 border-b"><span className="text-gray-600">- Used in Production</span><span className="font-medium text-red-600">- {fmt(s.consumed)} Kg</span></div>
+                  <div className="flex justify-between py-2 border-b"><span className="text-gray-600">± Adjustments</span><span className="font-medium">{s.adjusted >= 0 ? '+' : ''}{fmt(s.adjusted)} Kg</span></div>
+                  <div className="flex justify-between py-3 bg-amber-50 rounded-lg px-4 mt-2"><span className="font-bold text-gray-900">= Current Stock</span><span className="font-bold text-lg text-amber-600">{fmt(s.current_stock)} Kg</span></div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Type</th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Quantity (Kg)</th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Rate/Kg</th>
-                <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {movements.map((movement, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-900">{new Date(movement.date).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 text-sm">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        movement.type === 'purchase' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {movement.type === 'purchase' ? 'Purchase' : 'Sale'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-right font-semibold">
-                    <span className={movement.type === 'purchase' ? 'text-green-600' : 'text-red-600'}>
-                      {movement.type === 'purchase' ? '+' : '-'}{movement.quantity.toLocaleString('en-IN')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-right">₹{movement.rate.toLocaleString('en-IN')}</td>
-                  <td className="px-6 py-4 text-sm text-right text-gray-900">₹{movement.amount.toLocaleString('en-IN')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {movements.length === 0 && <p className="text-center py-8 text-gray-500">No stock movements found.</p>}
+      )}
+
+      {activeTab === 'finished' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-5 border-b"><h2 className="text-xl font-bold text-gray-900">Finished Product Inventory</h2></div>
+          {finishedSummary.length === 0 ? <EmptyState message="No finished products found" /> : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50"><tr>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Product</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase">Opening</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase">Produced</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase">Sold</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase">Adjustment</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase">Closing Stock</th>
+                </tr></thead>
+                <tbody className="divide-y divide-gray-100">
+                  {finishedSummary.map(s => (
+                    <tr key={s.product_name} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5 text-sm font-medium">{s.product_name}</td>
+                      <td className="px-4 py-2.5 text-sm text-right">{fmt(s.opening_stock)}</td>
+                      <td className="px-4 py-2.5 text-sm text-right text-green-600">+{fmt(s.produced)}</td>
+                      <td className="px-4 py-2.5 text-sm text-right text-red-600">-{fmt(s.sold)}</td>
+                      <td className="px-4 py-2.5 text-sm text-right">{s.adjusted >= 0 ? '+' : ''}{fmt(s.adjusted)}</td>
+                      <td className="px-4 py-2.5 text-sm text-right font-bold text-forest-700">{fmt(s.current_stock)} Kg</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      </div>
+      )}
+
+      {activeTab === 'ledger' && (
+        <div>
+          {movements.length === 0 ? <EmptyState message="No stock movements found." /> : <DataTable columns={ledgerColumns} data={movements} searchKeys={['product_name', 'transaction_number', 'transaction_type']} searchPlaceholder="Search ledger..." />}
+        </div>
+      )}
     </div>
   );
 };

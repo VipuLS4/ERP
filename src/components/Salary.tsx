@@ -1,466 +1,387 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, X, Trash2, DollarSign } from 'lucide-react';
-
-interface Employee {
-  id: string;
-  employee_id: string;
-  name: string;
-  mobile: string | null;
-  designation: string | null;
-  monthly_salary: number;
-  salary_balance: number;
-  status: string;
-  joined_date: string | null;
-}
-
-interface SalaryPayment {
-  id: string;
-  employee_id: string;
-  payment_date: string;
-  amount_paid: number;
-  month_year: string;
-  notes: string | null;
-  employees: { name: string; employee_id: string };
-}
+import { useAuth } from '../contexts/AuthContext';
+import { canEdit } from '../lib/auth';
+import { logAudit, generateTransactionNumber } from '../lib/auth';
+import type { Employee, SalaryPayment } from '../lib/types';
+import { Plus, Trash2, Eye, DollarSign, History } from 'lucide-react';
+import { Modal } from './ui/Modal';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { DataTable, type Column } from './ui/DataTable';
+import { PageHeader, Badge, FormField, inputClass, buttonClass } from './ui/Common';
+import { LoadingState, EmptyState } from './ui/States';
+import { useToast } from './ui/Toast';
 
 export const Salary = () => {
+  const { role } = useAuth();
+  const { toast } = useToast();
+  const editable = canEdit(role || undefined);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [payments, setPayments] = useState<SalaryPayment[]>([]);
-  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'employees' | 'payments'>('employees');
+  const [activeTab, setActiveTab] = useState<'records' | 'history'>('records');
+  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
+  const [showSalaryForm, setShowSalaryForm] = useState(false);
+  const [showReleaseForm, setShowReleaseForm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SalaryPayment | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<SalaryPayment | null>(null);
+  const [releasePayments, setReleasePayments] = useState<SalaryPayment[]>([]);
 
-  const [employeeForm, setEmployeeForm] = useState({
-    name: '',
-    mobile: '',
-    designation: '',
-    monthly_salary: '',
-    joined_date: '',
-  });
-
-  const [paymentForm, setPaymentForm] = useState({
+  const [employeeForm, setEmployeeForm] = useState({ name: '', mobile: '', designation: '', monthly_salary: '', joined_date: '' });
+  const [salaryForm, setSalaryForm] = useState({
     employee_id: '',
+    month_year: '',
+    gross_salary: '',
+    advance: '',
+    deduction: '',
+    remarks: '',
+  });
+  const [releaseForm, setReleaseForm] = useState({
+    salary_id: '',
     payment_date: new Date().toISOString().split('T')[0],
     amount_paid: '',
-    month_year: '',
+    payment_method: 'Cash',
     notes: '',
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     try {
-      const [employeesRes, paymentsRes] = await Promise.all([
-        supabase.from('employees').select('*').order('created_at', { ascending: false }),
-        supabase
-          .from('salary_payments')
-          .select('*, employees(name, employee_id)')
-          .order('payment_date', { ascending: false }),
+      const [eRes, pRes] = await Promise.all([
+        supabase.from('employees').select('*').order('name'),
+        supabase.from('salary_payments').select('*').order('payment_date', { ascending: false }),
       ]);
-
-      if (employeesRes.error) throw employeesRes.error;
-      if (paymentsRes.error) throw paymentsRes.error;
-
-      setEmployees(employeesRes.data || []);
-      setPayments(paymentsRes.data || []);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
-    }
+      setEmployees(eRes.data || []);
+      setPayments(pRes.data || []);
+    } catch (e) { console.error('Error loading salary data:', e); }
+    finally { setLoading(false); }
   };
 
-  const generateEmployeeId = async () => {
-    const { count } = await supabase
-      .from('employees')
-      .select('*', { count: 'exact', head: true });
-    return `EMP${String((count || 0) + 1).padStart(3, '0')}`;
-  };
+  const netSalaryCalc = (Number(salaryForm.gross_salary) || 0) + (Number(salaryForm.advance) || 0) - (Number(salaryForm.deduction) || 0);
 
   const handleEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const employeeId = await generateEmployeeId();
+      const empId = `EMP${String(employees.length + 1).padStart(3, '0')}`;
       const { error } = await supabase.from('employees').insert({
-        employee_id: employeeId,
+        employee_id: empId,
         name: employeeForm.name,
         mobile: employeeForm.mobile || null,
         designation: employeeForm.designation || null,
         monthly_salary: parseFloat(employeeForm.monthly_salary),
         joined_date: employeeForm.joined_date || null,
+        salary_balance: 0,
+        status: 'Active',
       });
-
       if (error) throw error;
-
+      await logAudit('Employee added', 'Salary', empId);
+      toast('Employee added successfully', 'success');
       setShowEmployeeForm(false);
       setEmployeeForm({ name: '', mobile: '', designation: '', monthly_salary: '', joined_date: '' });
       loadData();
-    } catch (error) {
-      console.error('Error creating employee:', error);
-    }
+    } catch (e) { console.error('Error adding employee:', e); toast('Error adding employee', 'error'); }
   };
 
-  const handlePaymentSubmit = async (e: React.FormEvent) => {
+  const handleSalarySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const amountPaid = parseFloat(paymentForm.amount_paid);
+      const salaryNumber = await generateTransactionNumber('salary_payments', 'SAL', 'salary_number');
+      const employee = employees.find(emp => emp.id === salaryForm.employee_id);
+      const netSalary = netSalaryCalc;
 
-      const { error: paymentError } = await supabase.from('salary_payments').insert({
-        employee_id: paymentForm.employee_id,
-        payment_date: paymentForm.payment_date,
-        amount_paid: amountPaid,
-        month_year: paymentForm.month_year,
-        notes: paymentForm.notes || null,
-      });
-
-      if (paymentError) throw paymentError;
-
-      const employee = employees.find(e => e.id === paymentForm.employee_id);
-      const newBalance = (employee?.salary_balance || 0) - amountPaid;
-
-      await supabase
-        .from('employees')
-        .update({ salary_balance: newBalance })
-        .eq('id', paymentForm.employee_id);
-
-      setShowPaymentForm(false);
-      setPaymentForm({
-        employee_id: '',
+      const { error } = await supabase.from('salary_payments').insert({
+        salary_number: salaryNumber,
+        employee_id: salaryForm.employee_id,
+        month_year: salaryForm.month_year,
+        gross_salary: Number(salaryForm.gross_salary) || 0,
+        advance: Number(salaryForm.advance) || 0,
+        deduction: Number(salaryForm.deduction) || 0,
+        net_salary: netSalary,
+        amount_paid: 0,
+        balance: netSalary,
         payment_date: new Date().toISOString().split('T')[0],
-        amount_paid: '',
-        month_year: '',
-        notes: '',
+        payment_method: 'Cash',
+        notes: salaryForm.remarks || null,
       });
-      loadData();
-    } catch (error) {
-      console.error('Error creating payment:', error);
-    }
-  };
-
-  const handleDeleteEmployee = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this employee?')) return;
-    try {
-      const { error } = await supabase.from('employees').delete().eq('id', id);
       if (error) throw error;
+      await logAudit('Salary record created', 'Salary', salaryNumber);
+      toast('Salary record created', 'success');
+      setShowSalaryForm(false);
+      setSalaryForm({ employee_id: '', month_year: '', gross_salary: '', advance: '', deduction: '', remarks: '' });
       loadData();
-    } catch (error) {
-      console.error('Error deleting employee:', error);
-    }
+    } catch (e) { console.error('Error creating salary record:', e); toast('Error creating salary record', 'error'); }
   };
 
-  if (loading) {
-    return <div className="text-center py-8">Loading...</div>;
-  }
+  const handleReleaseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const salary = payments.find(p => p.id === releaseForm.salary_id);
+      if (!salary) return;
+      const releaseAmount = Number(releaseForm.amount_paid);
+      const newTotalPaid = Number(salary.amount_paid) + releaseAmount;
+      const newBalance = Number(salary.net_salary) - newTotalPaid;
+
+      const { error } = await supabase.from('salary_payments').update({
+        amount_paid: newTotalPaid,
+        balance: newBalance,
+        payment_date: releaseForm.payment_date,
+        payment_method: releaseForm.payment_method,
+      }).eq('id', releaseForm.salary_id);
+      if (error) throw error;
+
+      // Insert a separate release record as a payment history entry
+      const releaseNumber = await generateTransactionNumber('salary_payments', 'SPR', 'salary_number');
+      await supabase.from('salary_payments').insert({
+        salary_number: releaseNumber,
+        employee_id: salary.employee_id,
+        month_year: salary.month_year,
+        gross_salary: 0,
+        advance: 0,
+        deduction: 0,
+        net_salary: 0,
+        amount_paid: releaseAmount,
+        balance: newBalance,
+        payment_date: releaseForm.payment_date,
+        payment_method: releaseForm.payment_method,
+        notes: `Release for ${salary.salary_number}: ${releaseForm.notes || ''}`,
+      });
+
+      await logAudit('Salary released', 'Salary', `${salary.salary_number} - ₹${releaseAmount}`);
+      toast(`Salary released: ₹${releaseAmount.toLocaleString('en-IN')}`, 'success');
+      setShowReleaseForm(false);
+      setReleaseForm({ salary_id: '', payment_date: new Date().toISOString().split('T')[0], amount_paid: '', payment_method: 'Cash', notes: '' });
+      loadData();
+    } catch (e) { console.error('Error releasing salary:', e); toast('Error releasing salary', 'error'); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await supabase.from('salary_payments').delete().eq('id', deleteTarget.id);
+      await logAudit('Salary record deleted', 'Salary', deleteTarget.salary_number);
+      toast('Salary record deleted', 'success');
+      loadData();
+    } catch (e) { console.error('Error deleting salary record:', e); toast('Error deleting record', 'error'); }
+    setDeleteTarget(null);
+  };
+
+  const openHistory = async (salary: SalaryPayment) => {
+    const releases = payments.filter(p => p.employee_id === salary.employee_id && p.month_year === salary.month_year && p.net_salary === 0 && p.amount_paid > 0);
+    setReleasePayments(releases);
+    setHistoryTarget(salary);
+    setShowHistory(true);
+  };
+
+  const fmtINR = (n: number) => `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+  const recordColumns: Column<SalaryPayment>[] = [
+    { key: 'salary_number', header: 'Salary #', sortable: true, render: (p) => <span className="font-medium text-forest-700">{p.salary_number}</span> },
+    { key: 'employee_id', header: 'Employee', render: (p) => { const emp = employees.find(e => e.id === p.employee_id); return emp ? `${emp.name} (${emp.employee_id})` : '-'; } },
+    { key: 'month_year', header: 'Month', sortable: true, render: (p) => p.month_year },
+    { key: 'gross_salary', header: 'Gross', align: 'right', render: (p) => fmtINR(Number(p.gross_salary)) },
+    { key: 'advance', header: 'Advance', align: 'right', render: (p) => fmtINR(Number(p.advance)) },
+    { key: 'deduction', header: 'Deduction', align: 'right', render: (p) => fmtINR(Number(p.deduction)) },
+    { key: 'net_salary', header: 'Net Salary', align: 'right', render: (p) => <span className="font-semibold">{fmtINR(Number(p.net_salary))}</span> },
+    { key: 'amount_paid', header: 'Released', align: 'right', render: (p) => <span className="text-green-600">{fmtINR(Number(p.amount_paid))}</span> },
+    { key: 'balance', header: 'Balance', align: 'right', render: (p) => <span className={Number(p.balance) > 0 ? 'text-red-600 font-semibold' : 'text-green-600'}>{fmtINR(Number(p.balance))}</span> },
+    {
+      key: 'actions', header: 'Actions', align: 'center',
+      render: (p) => p.net_salary > 0 ? (
+        <div className="flex items-center justify-center gap-1">
+          {editable && Number(p.balance) > 0 && <button onClick={(e) => { e.stopPropagation(); setReleaseForm({ ...releaseForm, salary_id: p.id }); setShowReleaseForm(true); }} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition" title="Release Salary"><DollarSign size={16} /></button>}
+          <button onClick={(e) => { e.stopPropagation(); openHistory(p); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Payment History"><History size={16} /></button>
+          {editable && <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button>}
+        </div>
+      ) : <Badge text="Release" color="gray" />,
+    },
+  ];
+
+  if (loading) return <LoadingState message="Loading salary data..." />;
+
+  const salaryRecords = payments.filter(p => p.net_salary > 0);
+  const releaseHistory = payments.filter(p => p.net_salary === 0 && p.amount_paid > 0);
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Salary Management</h1>
-        <div className="flex gap-3">
-          {activeTab === 'employees' && (
-            <button
-              onClick={() => setShowEmployeeForm(true)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-            >
-              <Plus size={20} />
-              Add Employee
-            </button>
-          )}
-          {activeTab === 'payments' && (
-            <button
-              onClick={() => setShowPaymentForm(true)}
-              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
-            >
-              <DollarSign size={20} />
-              Record Payment
-            </button>
-          )}
-        </div>
+      <PageHeader
+        title="Salary Management"
+        subtitle={`${employees.length} employees · ${salaryRecords.length} salary records`}
+        actions={editable && (
+          <div className="flex gap-2">
+            <button onClick={() => setShowEmployeeForm(true)} className={buttonClass.secondary}><Plus size={16} /> Add Employee</button>
+            <button onClick={() => setShowSalaryForm(true)} className={buttonClass.primary}><Plus size={16} /> Create Salary</button>
+          </div>
+        )}
+      />
+
+      <div className="flex gap-2 mb-6">
+        {([['records', 'Salary Records'], ['history', 'Payment History']] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setActiveTab(key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === key ? 'bg-forest-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            {label}
+          </button>
+        ))}
       </div>
 
-      <div className="flex gap-4 mb-6">
-        <button
-          onClick={() => setActiveTab('employees')}
-          className={`px-6 py-2 rounded-lg font-medium transition ${
-            activeTab === 'employees'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-        >
-          Employees
-        </button>
-        <button
-          onClick={() => setActiveTab('payments')}
-          className={`px-6 py-2 rounded-lg font-medium transition ${
-            activeTab === 'payments'
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-          }`}
-        >
-          Payment History
-        </button>
-      </div>
+      {activeTab === 'records' && (salaryRecords.length === 0 ? <EmptyState message="No salary records. Create a salary record for an employee!" /> : <DataTable columns={recordColumns} data={salaryRecords} searchKeys={['salary_number', 'month_year']} searchPlaceholder="Search salary records..." />)}
 
-      {showEmployeeForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Add New Employee</h2>
-              <button onClick={() => setShowEmployeeForm(false)} className="text-gray-500 hover:text-gray-700">
-                <X size={24} />
-              </button>
+      {activeTab === 'history' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-4 border-b"><h2 className="text-xl font-bold text-gray-900">Salary Payment / Release History</h2></div>
+          {releaseHistory.length === 0 ? <EmptyState message="No salary releases recorded yet." /> : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50"><tr>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Release #</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Date</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Employee</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Month</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase">Released Amount</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Method</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Remarks</th>
+                </tr></thead>
+                <tbody className="divide-y divide-gray-100">
+                  {releaseHistory.map(p => {
+                    const emp = employees.find(e => e.id === p.employee_id);
+                    return (
+                      <tr key={p.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5 text-sm font-medium text-forest-700">{p.salary_number}</td>
+                        <td className="px-4 py-2.5 text-sm">{new Date(p.payment_date).toLocaleDateString()}</td>
+                        <td className="px-4 py-2.5 text-sm">{emp ? `${emp.name} (${emp.employee_id})` : '-'}</td>
+                        <td className="px-4 py-2.5 text-sm">{p.month_year}</td>
+                        <td className="px-4 py-2.5 text-sm text-right font-semibold text-green-600">{fmtINR(Number(p.amount_paid))}</td>
+                        <td className="px-4 py-2.5 text-sm">{p.payment_method || 'Cash'}</td>
+                        <td className="px-4 py-2.5 text-sm text-gray-500">{p.notes || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <form onSubmit={handleEmployeeSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-                <input
-                  type="text"
-                  value={employeeForm.name}
-                  onChange={(e) => setEmployeeForm({ ...employeeForm, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
-                <input
-                  type="tel"
-                  value={employeeForm.mobile}
-                  onChange={(e) => setEmployeeForm({ ...employeeForm, mobile: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Designation</label>
-                <input
-                  type="text"
-                  value={employeeForm.designation}
-                  onChange={(e) => setEmployeeForm({ ...employeeForm, designation: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Salary *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={employeeForm.monthly_salary}
-                  onChange={(e) => setEmployeeForm({ ...employeeForm, monthly_salary: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Joining Date</label>
-                <input
-                  type="date"
-                  value={employeeForm.joined_date}
-                  onChange={(e) => setEmployeeForm({ ...employeeForm, joined_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition"
-                >
-                  Add Employee
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowEmployeeForm(false)}
-                  className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
+          )}
         </div>
       )}
 
-      {showPaymentForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Record Salary Payment</h2>
-              <button onClick={() => setShowPaymentForm(false)} className="text-gray-500 hover:text-gray-700">
-                <X size={24} />
-              </button>
+      {/* Add Employee Modal */}
+      <Modal open={showEmployeeForm} onClose={() => setShowEmployeeForm(false)} title="Add New Employee" size="md">
+        <form onSubmit={handleEmployeeSubmit} className="space-y-4">
+          <FormField label="Name" required><input type="text" value={employeeForm.name} onChange={(e) => setEmployeeForm({ ...employeeForm, name: e.target.value })} className={inputClass} required /></FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Mobile"><input type="tel" value={employeeForm.mobile} onChange={(e) => setEmployeeForm({ ...employeeForm, mobile: e.target.value })} className={inputClass} /></FormField>
+            <FormField label="Designation"><input type="text" value={employeeForm.designation} onChange={(e) => setEmployeeForm({ ...employeeForm, designation: e.target.value })} className={inputClass} /></FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Monthly Salary" required><input type="number" step="0.01" value={employeeForm.monthly_salary} onChange={(e) => setEmployeeForm({ ...employeeForm, monthly_salary: e.target.value })} className={inputClass} required /></FormField>
+            <FormField label="Joining Date"><input type="date" value={employeeForm.joined_date} onChange={(e) => setEmployeeForm({ ...employeeForm, joined_date: e.target.value })} className={inputClass} /></FormField>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" className={buttonClass.primary + ' flex-1 justify-center'}>Add Employee</button>
+            <button type="button" onClick={() => setShowEmployeeForm(false)} className={buttonClass.secondary + ' flex-1 justify-center'}>Cancel</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Create Salary Record Modal */}
+      <Modal open={showSalaryForm} onClose={() => setShowSalaryForm(false)} title="Create Salary Record" size="md">
+        <form onSubmit={handleSalarySubmit} className="space-y-4">
+          <FormField label="Employee" required>
+            <select value={salaryForm.employee_id} onChange={(e) => { const emp = employees.find(emp => emp.id === e.target.value); setSalaryForm({ ...salaryForm, employee_id: e.target.value, gross_salary: emp ? String(emp.monthly_salary) : '' }); }} className={inputClass} required>
+              <option value="">Select Employee</option>
+              {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name} ({emp.employee_id})</option>)}
+            </select>
+          </FormField>
+          <FormField label="Salary Month" required><input type="text" value={salaryForm.month_year} onChange={(e) => setSalaryForm({ ...salaryForm, month_year: e.target.value })} placeholder="e.g., September 2026" className={inputClass} required /></FormField>
+          <div className="grid grid-cols-3 gap-4">
+            <FormField label="Monthly Salary" required><input type="number" step="0.01" value={salaryForm.gross_salary} onChange={(e) => setSalaryForm({ ...salaryForm, gross_salary: e.target.value })} className={inputClass} required /></FormField>
+            <FormField label="Advance"><input type="number" step="0.01" value={salaryForm.advance} onChange={(e) => setSalaryForm({ ...salaryForm, advance: e.target.value })} className={inputClass} /></FormField>
+            <FormField label="Deduction"><input type="number" step="0.01" value={salaryForm.deduction} onChange={(e) => setSalaryForm({ ...salaryForm, deduction: e.target.value })} className={inputClass} /></FormField>
+          </div>
+          <FormField label="Remarks"><input type="text" value={salaryForm.remarks} onChange={(e) => setSalaryForm({ ...salaryForm, remarks: e.target.value })} className={inputClass} /></FormField>
+          <div className="bg-forest-50 rounded-lg p-4">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Net Salary (Monthly + Advance - Deduction):</span>
+              <span className="font-bold text-forest-700 text-lg">{fmtINR(netSalaryCalc)}</span>
             </div>
-            <form onSubmit={handlePaymentSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Employee *</label>
-                <select
-                  value={paymentForm.employee_id}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, employee_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  required
-                >
-                  <option value="">Select Employee</option>
-                  {employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.employee_id})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date *</label>
-                <input
-                  type="date"
-                  value={paymentForm.payment_date}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount Paid *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={paymentForm.amount_paid}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, amount_paid: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Month/Year *</label>
-                <input
-                  type="text"
-                  value={paymentForm.month_year}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, month_year: e.target.value })}
-                  placeholder="e.g., January 2024"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea
-                  value={paymentForm.notes}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  rows={2}
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  className="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition"
-                >
-                  Save Payment
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPaymentForm(false)}
-                  className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+          <div className="flex gap-3 pt-2">
+            <button type="submit" className={buttonClass.primary + ' flex-1 justify-center'}>Create Salary Record</button>
+            <button type="button" onClick={() => setShowSalaryForm(false)} className={buttonClass.secondary + ' flex-1 justify-center'}>Cancel</button>
+          </div>
+        </form>
+      </Modal>
 
-      {activeTab === 'employees' && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Employee ID</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Designation</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Mobile</th>
-                  <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Monthly Salary</th>
-                  <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Balance</th>
-                  <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Status</th>
-                  <th className="px-6 py-3 text-center text-sm font-semibold text-gray-700">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {employees.map((employee) => (
-                  <tr key={employee.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{employee.employee_id}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{employee.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{employee.designation || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{employee.mobile || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-right text-gray-900">
-                      ₹{employee.monthly_salary.toLocaleString('en-IN')}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right text-red-600 font-semibold">
-                      ₹{employee.salary_balance.toLocaleString('en-IN')}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-center">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        employee.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {employee.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-center">
-                      <button
-                        onClick={() => handleDeleteEmployee(employee.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                        title="Delete"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {employees.length === 0 && (
-              <p className="text-center py-8 text-gray-500">No employees found. Add your first employee!</p>
-            )}
+      {/* Release Salary Modal */}
+      <Modal open={showReleaseForm} onClose={() => setShowReleaseForm(false)} title="Release Salary Payment" size="md">
+        <form onSubmit={handleReleaseSubmit} className="space-y-4">
+          {(() => {
+            const salary = payments.find(p => p.id === releaseForm.salary_id);
+            const emp = employees.find(e => e.id === salary?.employee_id);
+            return salary && emp ? (
+              <div className="bg-gray-50 rounded-lg p-3 space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-gray-600">Employee:</span><span className="font-medium">{emp.name}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Salary Month:</span><span className="font-medium">{salary.month_year}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Net Salary:</span><span className="font-medium">{fmtINR(Number(salary.net_salary))}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Already Released:</span><span className="font-medium text-green-600">{fmtINR(Number(salary.amount_paid))}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Remaining Balance:</span><span className="font-medium text-red-600">{fmtINR(Number(salary.balance))}</span></div>
+              </div>
+            ) : null;
+          })()}
+          <FormField label="Release Date" required><input type="date" value={releaseForm.payment_date} onChange={(e) => setReleaseForm({ ...releaseForm, payment_date: e.target.value })} className={inputClass} required /></FormField>
+          <FormField label="Release Amount" required><input type="number" step="0.01" value={releaseForm.amount_paid} onChange={(e) => setReleaseForm({ ...releaseForm, amount_paid: e.target.value })} className={inputClass} required /></FormField>
+          <FormField label="Payment Method">
+            <select value={releaseForm.payment_method} onChange={(e) => setReleaseForm({ ...releaseForm, payment_method: e.target.value })} className={inputClass}>
+              <option value="Cash">Cash</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Cheque">Cheque</option>
+              <option value="UPI">UPI</option>
+            </select>
+          </FormField>
+          <FormField label="Remarks"><input type="text" value={releaseForm.notes} onChange={(e) => setReleaseForm({ ...releaseForm, notes: e.target.value })} className={inputClass} /></FormField>
+          <div className="flex gap-3 pt-2">
+            <button type="submit" className={buttonClass.success + ' flex-1 justify-center'}><DollarSign size={16} /> Release Salary</button>
+            <button type="button" onClick={() => setShowReleaseForm(false)} className={buttonClass.secondary + ' flex-1 justify-center'}>Cancel</button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
-      {activeTab === 'payments' && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Date</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Employee</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Month/Year</th>
-                  <th className="px-6 py-3 text-right text-sm font-semibold text-gray-700">Amount Paid</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {payments.map((payment) => (
-                  <tr key={payment.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {new Date(payment.payment_date).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{payment.employees.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{payment.month_year}</td>
-                    <td className="px-6 py-4 text-sm text-right font-semibold text-green-600">
-                      ₹{payment.amount_paid.toLocaleString('en-IN')}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{payment.notes || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {payments.length === 0 && (
-              <p className="text-center py-8 text-gray-500">No payments found.</p>
-            )}
+      {/* Payment History Modal */}
+      <Modal open={showHistory} onClose={() => setShowHistory(false)} title={`Payment History — ${historyTarget?.salary_number}`} size="md">
+        {historyTarget && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-gray-50 rounded-lg p-3"><p className="text-xs text-gray-500">Net Salary</p><p className="font-bold">{fmtINR(Number(historyTarget.net_salary))}</p></div>
+              <div className="bg-gray-50 rounded-lg p-3"><p className="text-xs text-gray-500">Total Released</p><p className="font-bold text-green-600">{fmtINR(Number(historyTarget.amount_paid))}</p></div>
+              <div className="bg-gray-50 rounded-lg p-3"><p className="text-xs text-gray-500">Balance</p><p className="font-bold text-red-600">{fmtINR(Number(historyTarget.balance))}</p></div>
+            </div>
+            {releasePayments.length > 0 ? (
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="w-full">
+                  <thead className="bg-gray-50"><tr>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Release Date</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase">Released Amount</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Method</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Remarks</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {releasePayments.map(p => (
+                      <tr key={p.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5 text-sm">{new Date(p.payment_date).toLocaleDateString()}</td>
+                        <td className="px-4 py-2.5 text-sm text-right font-semibold text-green-600">{fmtINR(Number(p.amount_paid))}</td>
+                        <td className="px-4 py-2.5 text-sm">{p.payment_method || 'Cash'}</td>
+                        <td className="px-4 py-2.5 text-sm text-gray-500">{p.notes || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <EmptyState message="No releases recorded yet for this salary." />}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
+
+      <ConfirmDialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} title="Delete Salary Record" message={`Are you sure you want to delete salary record "${deleteTarget?.salary_number}"?`} confirmLabel="Delete" />
     </div>
   );
 };
