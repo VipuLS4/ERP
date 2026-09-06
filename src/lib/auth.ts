@@ -69,18 +69,12 @@ export async function upsertUserProfile(userId: string, email: string) {
     return;
   }
 
-  const { data: superAdminRole } = await supabase
-    .from('roles')
-    .select('id')
-    .eq('role_key', 'super_admin')
-    .maybeSingle();
-
   await supabase.from('user_profiles').insert({
     user_id: userId,
     name: email.split('@')[0],
     email,
-    role_id: superAdminRole?.id || null,
-    status: 'Active',
+    role_id: null,
+    status: 'Pending',
     last_login: new Date().toISOString(),
   });
 }

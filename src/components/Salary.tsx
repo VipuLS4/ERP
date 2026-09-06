@@ -120,8 +120,11 @@ export const Salary = () => {
       const salary = payments.find(p => p.id === releaseForm.salary_id);
       if (!salary) return;
       const releaseAmount = Number(releaseForm.amount_paid);
-      const newTotalPaid = Number(salary.amount_paid) + releaseAmount;
-      const newBalance = Number(salary.net_salary) - newTotalPaid;
+      const { data: freshSalary } = await supabase.from('salary_payments').select('amount_paid, net_salary, balance').eq('id', releaseForm.salary_id).maybeSingle();
+      const currentPaid = Number(freshSalary?.amount_paid || 0);
+      const netSalary = Number(freshSalary?.net_salary || 0);
+      const newTotalPaid = currentPaid + releaseAmount;
+      const newBalance = netSalary - newTotalPaid;
 
       const { error } = await supabase.from('salary_payments').update({
         amount_paid: newTotalPaid,

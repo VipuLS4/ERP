@@ -122,9 +122,11 @@ export const Sales = () => {
         });
       }
 
-      // Update customer balance
+      // Update customer balance — re-fetch fresh balance from DB
       if (customer) {
-        const newBalance = Number(customer.balance) + outstandingBalance;
+        const { data: freshCust } = await supabase.from('customers').select('balance').eq('id', customer.id).maybeSingle();
+        const currentCustBalance = Number(freshCust?.balance || 0);
+        const newBalance = currentCustBalance + outstandingBalance;
         await supabase.from('customers').update({ balance: newBalance }).eq('id', customer.id);
         await supabase.from('customer_transactions').insert({
           customer_id: customer.id,
@@ -138,7 +140,8 @@ export const Sales = () => {
           notes: `Invoice ${invoiceNumber}`,
         });
         if (paymentReceived > 0) {
-          const balAfter = newBalance - paymentReceived;
+          const { data: freshCust2 } = await supabase.from('customers').select('balance').eq('id', customer.id).maybeSingle();
+          const balAfter = Number(freshCust2?.balance || 0) - paymentReceived;
           await supabase.from('customers').update({ balance: balAfter }).eq('id', customer.id);
           await supabase.from('customer_transactions').insert({
             customer_id: customer.id,

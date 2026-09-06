@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { canEdit, logAudit } from '../lib/auth';
 import type { RoleKey } from '../lib/types';
-import { Plus, Trash2, KeyRound } from 'lucide-react';
+import { Plus, Trash2, KeyRound, Shield } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { DataTable, type Column } from './ui/DataTable';
@@ -39,6 +39,8 @@ export const UserManagement = () => {
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserProfile | null>(null);
   const [resetTarget, setResetTarget] = useState<UserProfile | null>(null);
+  const [roleEditTarget, setRoleEditTarget] = useState<UserProfile | null>(null);
+  const [selectedRoleId, setSelectedRoleId] = useState('');
   const [formData, setFormData] = useState({ name: '', email: '', mobile: '', department: '', role_id: '', password: '' });
 
   useEffect(() => { loadData(); }, []);
@@ -59,23 +61,26 @@ export const UserManagement = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`;
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          name: formData.name,
+          mobile: formData.mobile,
+          department: formData.department,
+          role_id: formData.role_id,
+        }),
       });
-      if (authError) throw authError;
-      if (!authData.user) throw new Error('Failed to create user');
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to create user');
 
-      const { error: profileError } = await supabase.from('user_profiles').insert({
-        user_id: authData.user.id,
-        name: formData.name,
-        email: formData.email,
-        mobile: formData.mobile || null,
-        department: formData.department || null,
-        role_id: formData.role_id || null,
-        status: 'Active',
-      });
-      if (profileError) throw profileError;
       await logAudit('User created', 'User Management', formData.email);
       toast('User created successfully', 'success');
       setShowForm(false);
@@ -109,6 +114,19 @@ export const UserManagement = () => {
     setResetTarget(null);
   };
 
+  const handleRoleUpdate = async () => {
+    if (!roleEditTarget || !selectedRoleId) { toast('Please select a role', 'error'); return; }
+    try {
+      const { error } = await supabase.from('user_profiles').update({ role_id: selectedRoleId }).eq('id', roleEditTarget.id);
+      if (error) throw error;
+      await logAudit('Role assigned', 'User Management', `${roleEditTarget.name} -> ${roles.find(r => r.id === selectedRoleId)?.role_name || ''}`);
+      toast('Role updated successfully', 'success');
+      setRoleEditTarget(null);
+      setSelectedRoleId('');
+      loadData();
+    } catch (e) { console.error('Error updating role:', e); toast('Error updating role', 'error'); }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
@@ -126,7 +144,16 @@ export const UserManagement = () => {
     { key: 'email', header: 'Email', render: (u) => u.email || '-' },
     { key: 'mobile', header: 'Mobile', render: (u) => u.mobile || '-' },
     { key: 'department', header: 'Department', render: (u) => u.department || '-' },
-    { key: 'roles', header: 'Role', render: (u) => u.roles?.role_name || 'No role' },
+    { key: 'roles', header: 'Role', render: (u) => (
+      <div className="flex items-center gap-2">
+        <span className={u.roles?.role_name ? '' : 'text-amber-600 font-medium'}>{u.roles?.role_name || 'No role'}</span>
+        {editable && (
+          <button onClick={(e) => { e.stopPropagation(); setRoleEditTarget(u); setSelectedRoleId(u.role_id || ''); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded transition" title="Assign Role">
+            <Shield size={14} />
+          </button>
+        )}
+      </div>
+    ) },
     { key: 'status', header: 'Status', align: 'center', render: (u) => <Badge text={u.status || 'Active'} color={u.status === 'Active' ? 'green' : 'gray'} /> },
     { key: 'last_login', header: 'Last Login', render: (u) => u.last_login ? new Date(u.last_login).toLocaleString() : 'Never' },
     {
@@ -184,6 +211,22 @@ export const UserManagement = () => {
 
       <ConfirmDialog open={!!resetTarget} onClose={() => setResetTarget(null)} onConfirm={handleResetPassword}
         title="Reset Password" message={`Send password reset instructions to "${resetTarget?.email}"?`} confirmLabel="Send Reset" danger={false} />
+
+      <Modal open={!!roleEditTarget} onClose={() => { setRoleEditTarget(null); setSelectedRoleId(''); }} title={`Assign Role: ${roleEditTarget?.name || ''}`} size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">Select a role for this user. They will only be able to access modules assigned to that role.</p>
+          <FormField label="Role" required>
+            <select value={selectedRoleId} onChange={(e) => setSelectedRoleId(e.target.value)} className={inputClass} required>
+              <option value="">Select Role</option>
+              {roles.map((r) => <option key={r.id} value={r.id}>{r.role_name}</option>)}
+            </select>
+          </FormField>
+          <div className="flex gap-3 pt-2">
+            <button onClick={handleRoleUpdate} className={buttonClass.primary + ' flex-1 justify-center'}>Update Role</button>
+            <button onClick={() => { setRoleEditTarget(null); setSelectedRoleId(''); }} className={buttonClass.secondary + ' flex-1 justify-center'}>Cancel</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

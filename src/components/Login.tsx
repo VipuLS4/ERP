@@ -4,16 +4,15 @@ import { useAuth } from '../contexts/AuthContext';
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    const { error: authError } = isSignUp ? await signUp(email, password) : await signIn(email, password);
+    const { error: authError } = await signIn(email, password);
     if (authError) setError(authError.message);
     setLoading(false);
   };
@@ -30,8 +29,8 @@ export const Login = () => {
 
         <div className="bg-[#fffdf7] rounded-2xl shadow-2xl p-8 border border-[#e8b44a]/30">
           <div className="mb-6">
-            <h2 className="text-xl font-bold text-[#183b24]">{isSignUp ? 'Create your account' : 'Welcome back'}</h2>
-            <p className="text-sm text-slate-500 mt-1">{isSignUp ? 'Set up access to your ERP workspace.' : 'Sign in to manage your operations.'}</p>
+            <h2 className="text-xl font-bold text-[#183b24]">Welcome back</h2>
+            <p className="text-sm text-slate-500 mt-1">Sign in to manage your operations.</p>
           </div>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
@@ -44,12 +43,10 @@ export const Login = () => {
             </div>
             {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-lg text-sm">{error}</div>}
             <button type="submit" disabled={loading} className="w-full bg-[#1f542d] text-white py-2.5 rounded-lg font-semibold hover:bg-[#163d21] transition disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm">
-              {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
+              {loading ? 'Please wait...' : 'Sign In'}
             </button>
           </form>
-          <div className="mt-5 text-center">
-            <button onClick={() => setIsSignUp(!isSignUp)} className="text-[#1f542d] hover:text-[#d49a2a] text-sm font-semibold transition">{isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}</button>
-          </div>
+          <p className="mt-5 text-center text-xs text-slate-400">Accounts are created by a Super Admin. Contact your administrator for access.</p>
         </div>
         <p className="text-center text-[#d9d5c9] text-xs mt-6">Raj & Brothers ERP Platform</p>
       </div>

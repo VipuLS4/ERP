@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { canEdit } from '../lib/auth';
 import { logAudit, generateTransactionNumber } from '../lib/auth';
-import type { Purchase, Vendor } from '../lib/types';
+import type { Purchase, Vendor, Product, StockItem } from '../lib/types';
 import { Plus, Trash2 } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -18,12 +18,15 @@ export const Purchases = () => {
   const editable = canEdit(role || undefined);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Purchase | null>(null);
   const [formData, setFormData] = useState({
     purchase_date: new Date().toISOString().split('T')[0],
     vendor_id: '',
+    product_id: '',
     quantity_kg: '',
     rate_per_kg: '',
     other_charges: '',
@@ -38,19 +41,27 @@ export const Purchases = () => {
 
   const loadData = async () => {
     try {
-      const [pRes, vRes] = await Promise.all([
+      const [pRes, vRes, prodRes, stRes] = await Promise.all([
         supabase.from('purchases').select('*, vendors(name, vendor_id)').order('purchase_date', { ascending: false }),
         supabase.from('vendors').select('*').order('name'),
+        supabase.from('products').select('*').eq('is_active', true),
+        supabase.from('stock').select('*'),
       ]);
       if (pRes.error) throw pRes.error;
       setPurchases(pRes.data || []);
       setVendors(vRes.data || []);
+      setProducts(prodRes.data || []);
+      setStockItems(stRes.data || []);
     } catch (e) { console.error('Error loading data:', e); }
     finally { setLoading(false); }
   };
 
+  const selectedProduct = products.find(p => p.id === formData.product_id);
+  const selectedProductName = selectedProduct?.name || '';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedProduct) { toast('Please select a product', 'error'); return; }
     try {
       const quantity = parseFloat(formData.quantity_kg);
       const rate = parseFloat(formData.rate_per_kg);
@@ -58,6 +69,7 @@ export const Purchases = () => {
       const totalAmount = quantity * rate + otherCharges;
       const paymentMade = parseFloat(formData.payment_made) || 0;
       const balanceAmount = totalAmount - paymentMade;
+      const productName = selectedProduct.name;
 
       const purchaseNumber = await generateTransactionNumber('purchases', 'PUR', 'purchase_number');
 
@@ -65,6 +77,8 @@ export const Purchases = () => {
         purchase_number: purchaseNumber,
         purchase_date: formData.purchase_date,
         vendor_id: formData.vendor_id,
+        product_id: formData.product_id,
+        product_name: productName,
         quantity_kg: quantity,
         rate_per_kg: rate,
         total_amount: totalAmount,
@@ -81,12 +95,13 @@ export const Purchases = () => {
 
       if (purchaseError) throw purchaseError;
 
-      // Update vendor balance
-      const vendor = vendors.find(v => v.id === formData.vendor_id);
-      const newVendorBalance = (vendor?.balance || 0) + balanceAmount;
+      // Re-fetch vendor balance fresh from DB (not stale state)
+      const { data: freshVendor } = await supabase.from('vendors').select('balance').eq('id', formData.vendor_id).maybeSingle();
+      const currentVendorBalance = Number(freshVendor?.balance || 0);
+      const newVendorBalance = currentVendorBalance + balanceAmount;
       await supabase.from('vendors').update({ balance: newVendorBalance }).eq('id', formData.vendor_id);
 
-      // Vendor transaction
+      const vendor = vendors.find(v => v.id === formData.vendor_id);
       await supabase.from('vendor_transactions').insert({
         vendor_id: formData.vendor_id,
         transaction_date: formData.purchase_date,
@@ -99,15 +114,16 @@ export const Purchases = () => {
         notes: `Purchase ${purchaseNumber}: ${quantity} Kg @ ₹${rate}/Kg`,
       });
 
-      // Update stock
-      const { data: stockData } = await supabase.from('stock').select('id, current_stock_kg').eq('product_name', 'Rice Bran').maybeSingle();
-      if (stockData) {
-        const newStock = Number(stockData.current_stock_kg) + quantity;
-        await supabase.from('stock').update({ current_stock_kg: newStock, last_updated: new Date().toISOString() }).eq('id', stockData.id);
+      // Update stock for the SELECTED product, not hardcoded 'Rice Bran'
+      const stockItem = stockItems.find(s => s.product_name === productName || s.product_id === formData.product_id);
+      if (stockItem) {
+        const newStock = Number(stockItem.current_stock_kg) + quantity;
+        await supabase.from('stock').update({ current_stock_kg: newStock, last_updated: new Date().toISOString() }).eq('id', stockItem.id);
         await supabase.from('stock_movements').insert({
           movement_date: formData.purchase_date,
           transaction_number: purchaseNumber,
-          product_name: 'Rice Bran',
+          product_id: formData.product_id,
+          product_name: productName,
           transaction_type: 'Purchase',
           quantity_in: quantity,
           quantity_out: 0,
@@ -121,7 +137,7 @@ export const Purchases = () => {
       await logAudit('Purchase created', 'Purchases', purchaseNumber);
       toast('Purchase created successfully', 'success');
       setShowForm(false);
-      setFormData({ purchase_date: new Date().toISOString().split('T')[0], vendor_id: '', quantity_kg: '', rate_per_kg: '', other_charges: '', payment_made: '', vehicle_number: '', challan_number: '', number_of_bags: '', remarks: '' });
+      setFormData({ purchase_date: new Date().toISOString().split('T')[0], vendor_id: '', product_id: '', quantity_kg: '', rate_per_kg: '', other_charges: '', payment_made: '', vehicle_number: '', challan_number: '', number_of_bags: '', remarks: '' });
       loadData();
     } catch (e) { console.error('Error creating purchase:', e); toast('Error creating purchase', 'error'); }
   };
@@ -129,14 +145,22 @@ export const Purchases = () => {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      const vendor = vendors.find(v => v.id === deleteTarget.vendor_id);
-      const newVendorBalance = (vendor?.balance || 0) - deleteTarget.balance_amount;
+      // Re-fetch vendor balance fresh from DB
+      const { data: freshVendor } = await supabase.from('vendors').select('balance').eq('id', deleteTarget.vendor_id).maybeSingle();
+      const currentVendorBalance = Number(freshVendor?.balance || 0);
+      const newVendorBalance = currentVendorBalance - Number(deleteTarget.balance_amount);
       await supabase.from('vendors').update({ balance: newVendorBalance }).eq('id', deleteTarget.vendor_id);
 
-      const { data: stockData } = await supabase.from('stock').select('current_stock_kg').eq('product_name', 'Rice Bran').maybeSingle();
+      // Use the product from the purchase record, not hardcoded 'Rice Bran'
+      const productName = deleteTarget.product_name || 'Rice Bran';
+      const productId = deleteTarget.product_id;
+      const { data: stockData } = await supabase.from('stock')
+        .select('id, current_stock_kg')
+        .eq('product_name', productName)
+        .maybeSingle();
       if (stockData) {
-        const newStock = Number(stockData.current_stock_kg) - deleteTarget.quantity_kg;
-        await supabase.from('stock').update({ current_stock_kg: newStock, last_updated: new Date().toISOString() }).eq('product_name', 'Rice Bran');
+        const newStock = Number(stockData.current_stock_kg) - Number(deleteTarget.quantity_kg);
+        await supabase.from('stock').update({ current_stock_kg: newStock, last_updated: new Date().toISOString() }).eq('id', stockData.id);
       }
 
       await supabase.from('vendor_transactions').delete().eq('purchase_id', deleteTarget.id);
@@ -155,6 +179,7 @@ export const Purchases = () => {
     { key: 'purchase_number', header: 'Purchase #', sortable: true, render: (p) => <span className="font-medium text-blue-600">{p.purchase_number || '-'}</span> },
     { key: 'purchase_date', header: 'Date', sortable: true, render: (p) => new Date(p.purchase_date).toLocaleDateString() },
     { key: 'vendor', header: 'Vendor', render: (p) => p.vendors?.name || '-' },
+    { key: 'product_name', header: 'Product', render: (p) => <Badge text={p.product_name || 'Rice Bran'} color="blue" /> },
     { key: 'vehicle_number', header: 'Vehicle', render: (p) => p.vehicle_number || '-' },
     { key: 'quantity_kg', header: 'Qty (Kg)', align: 'right', sortable: true, render: (p) => Number(p.quantity_kg).toLocaleString('en-IN') },
     { key: 'rate_per_kg', header: 'Rate/Kg', align: 'right', render: (p) => `₹${Number(p.rate_per_kg).toLocaleString('en-IN')}` },
@@ -188,6 +213,12 @@ export const Purchases = () => {
               </select>
             </FormField>
           </div>
+          <FormField label="Product" required>
+            <select value={formData.product_id} onChange={(e) => { const p = products.find(p => p.id === e.target.value); setFormData({ ...formData, product_id: e.target.value, rate_per_kg: p ? String(p.sale_rate) : '' }); }} className={inputClass} required>
+              <option value="">Select Product</option>
+              {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.product_type})</option>)}
+            </select>
+          </FormField>
           <div className="grid grid-cols-3 gap-4">
             <FormField label="Vehicle Number"><input type="text" value={formData.vehicle_number} onChange={(e) => setFormData({ ...formData, vehicle_number: e.target.value })} className={inputClass} /></FormField>
             <FormField label="Challan Number"><input type="text" value={formData.challan_number} onChange={(e) => setFormData({ ...formData, challan_number: e.target.value })} className={inputClass} /></FormField>

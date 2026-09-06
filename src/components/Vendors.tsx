@@ -191,7 +191,9 @@ function VendorDetail({ vendor, onBack }: { vendor: Vendor; onBack: () => void }
     e.preventDefault();
     try {
       const amount = parseFloat(paymentForm.amount);
-      const newBalance = Number(vendor.balance) - amount;
+      const { data: freshVendor } = await supabase.from('vendors').select('balance').eq('id', vendor.id).maybeSingle();
+      const currentBalance = Number(freshVendor?.balance || 0);
+      const newBalance = currentBalance - amount;
       await supabase.from('vendors').update({ balance: newBalance }).eq('id', vendor.id);
       const payNum = await generateTransactionNumber('vendor_transactions', 'PAY');
       await supabase.from('vendor_transactions').insert({

@@ -183,7 +183,9 @@ function CustomerDetail({ customer, onBack }: { customer: Customer; onBack: () =
     e.preventDefault();
     try {
       const amount = parseFloat(paymentForm.amount);
-      const newBalance = Number(customer.balance) - amount;
+      const { data: freshCust } = await supabase.from('customers').select('balance').eq('id', customer.id).maybeSingle();
+      const currentBalance = Number(freshCust?.balance || 0);
+      const newBalance = currentBalance - amount;
       await supabase.from('customers').update({ balance: newBalance }).eq('id', customer.id);
       const payNum = await generateTransactionNumber('customer_transactions', 'CP');
       await supabase.from('customer_transactions').insert({

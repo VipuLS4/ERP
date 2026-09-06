@@ -10,7 +10,6 @@ interface AuthContextType {
   role: RoleKey | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -31,6 +30,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const loadProfile = async (userId: string) => {
     const p = await fetchUserProfile(userId);
     setProfile(p as UserProfile | null);
+    if (p && (!p.role_id || p.status === 'Pending' || p.status === 'Inactive')) {
+      await supabase.auth.signOut();
+      setProfile(null);
+    }
   };
 
   useEffect(() => {
@@ -75,15 +78,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (email: string, password: string) => {
-    try {
-      const { error } = await supabase.auth.signUp({ email, password });
-      return { error };
-    } catch (error) {
-      return { error: error as Error };
-    }
-  };
-
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
@@ -92,7 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const role = (profile?.roles?.role_key as RoleKey) || null;
 
   return (
-    <AuthContext.Provider value={{ user, profile, role, loading, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, role, loading, signIn, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
