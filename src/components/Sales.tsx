@@ -3,14 +3,15 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { canEdit } from '../lib/auth';
 import { logAudit, generateTransactionNumber } from '../lib/auth';
-import type { Sale, Customer, Product, StockItem } from '../lib/types';
-import { Plus, Trash2 } from 'lucide-react';
+import type { Sale, Customer, Product, StockItem, Settings } from '../lib/types';
+import { Plus, Trash2, Download, Printer } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { DataTable, type Column } from './ui/DataTable';
 import { PageHeader, Badge, FormField, inputClass, buttonClass } from './ui/Common';
 import { LoadingState, EmptyState } from './ui/States';
 import { useToast } from './ui/Toast';
+import { generateInvoicePdf, printInvoice } from '../lib/pdf';
 
 export const Sales = () => {
   const { role } = useAuth();
@@ -20,15 +21,19 @@ export const Sales = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null);
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     sale_date: new Date().toISOString().split('T')[0],
     customer_id: '',
     product_id: '',
     quantity_kg: '',
     rate_per_kg: '',
+    tax_rate: '5',
+    discount: '',
     payment_received: '',
     payment_date: new Date().toISOString().split('T')[0],
     remarks: '',
@@ -38,16 +43,18 @@ export const Sales = () => {
 
   const loadData = async () => {
     try {
-      const [sRes, cRes, pRes, stRes] = await Promise.all([
+      const [sRes, cRes, pRes, stRes, setRes] = await Promise.all([
         supabase.from('sales').select('*').order('sale_date', { ascending: false }),
         supabase.from('customers').select('*').order('name'),
         supabase.from('products').select('*').eq('is_active', true).neq('product_type', 'Raw Material'),
         supabase.from('stock').select('*'),
+        supabase.from('settings').select('*').limit(1).maybeSingle(),
       ]);
       setSales(sRes.data || []);
       setCustomers(cRes.data || []);
       setProducts(pRes.data || []);
       setStockItems(stRes.data || []);
+      setSettings(setRes.data as Settings | null);
     } catch (e) { console.error('Error loading sales data:', e); }
     finally { setLoading(false); }
   };
@@ -62,10 +69,34 @@ export const Sales = () => {
   const currentStock = availableStock(selectedProductName);
   const quantity = parseFloat(formData.quantity_kg) || 0;
   const rate = parseFloat(formData.rate_per_kg) || 0;
-  const totalAmount = quantity * rate;
+  const taxRate = parseFloat(formData.tax_rate) || 0;
+  const discount = parseFloat(formData.discount) || 0;
+  const grossAmount = quantity * rate;
+  const taxableValue = Math.max(0, grossAmount - discount);
+  const taxAmount = (taxableValue * taxRate) / 100;
+  const totalAmount = taxableValue + taxAmount;
   const paymentReceived = parseFloat(formData.payment_received) || 0;
   const outstandingBalance = totalAmount - paymentReceived;
   const insufficientStock = quantity > currentStock;
+
+  const selectedCustomer = customers.find(c => c.id === formData.customer_id);
+  const businessState = settings?.state || '';
+  const customerState = selectedCustomer?.state || '';
+  const isInterState = !!(businessState && customerState && businessState.toLowerCase() !== customerState.toLowerCase());
+
+  const cgstAmount = isInterState ? 0 : taxAmount / 2;
+  const sgstAmount = isInterState ? 0 : taxAmount / 2;
+  const igstAmount = isInterState ? taxAmount : 0;
+
+  const handleProductChange = (productId: string) => {
+    const p = products.find(p => p.id === productId);
+    setFormData(prev => ({
+      ...prev,
+      product_id: productId,
+      rate_per_kg: p ? String(p.sale_rate) : '',
+      tax_rate: p ? String(p.gst_rate ?? 5) : prev.tax_rate,
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +105,7 @@ export const Sales = () => {
 
     try {
       const invoiceNumber = await generateTransactionNumber('sales', 'INV', 'invoice_number');
-      const customer = customers.find(c => c.id === formData.customer_id);
+      const customer = selectedCustomer;
       const productName = selectedProduct.name;
 
       const { data: saleData, error } = await supabase.from('sales').insert({
@@ -84,18 +115,24 @@ export const Sales = () => {
         customer_name: customer?.name || 'Walk-in Customer',
         customer_mobile: customer?.mobile || null,
         customer_address: customer?.address || null,
+        customer_state: customer?.state || null,
         product_name: productName,
         product_id: formData.product_id,
         quantity_kg: quantity,
         rate_per_kg: rate,
         total_amount: totalAmount,
-        discount: 0,
-        tax_amount: 0,
+        discount: discount,
+        tax_amount: taxAmount,
+        tax_rate: taxRate,
+        cgst_amount: cgstAmount,
+        sgst_amount: sgstAmount,
+        igst_amount: igstAmount,
+        is_inter_state: isInterState,
         other_charges: 0,
         payment_received: paymentReceived,
         outstanding_balance: outstandingBalance,
         payment_method: 'Cash',
-        payment_status: outstandingBalance <= 0 ? 'Paid' : 'Partial',
+        payment_status: outstandingBalance <= 0 ? 'Paid' : (paymentReceived > 0 ? 'Partial' : 'Outstanding'),
         remarks: formData.remarks || null,
         status: 'Completed',
       }).select().single();
@@ -160,7 +197,7 @@ export const Sales = () => {
       await logAudit('Sale created', 'Sales', invoiceNumber);
       toast('Sale recorded successfully', 'success');
       setShowForm(false);
-      setFormData({ sale_date: new Date().toISOString().split('T')[0], customer_id: '', product_id: '', quantity_kg: '', rate_per_kg: '', payment_received: '', payment_date: new Date().toISOString().split('T')[0], remarks: '' });
+      setFormData({ sale_date: new Date().toISOString().split('T')[0], customer_id: '', product_id: '', quantity_kg: '', rate_per_kg: '', tax_rate: '5', discount: '', payment_received: '', payment_date: new Date().toISOString().split('T')[0], remarks: '' });
       loadData();
     } catch (e) { console.error('Error creating sale:', e); toast('Error creating sale', 'error'); }
   };
@@ -194,6 +231,27 @@ export const Sales = () => {
     setDeleteTarget(null);
   };
 
+  const handleDownloadInvoice = async (sale: Sale) => {
+    setPdfLoading(sale.id);
+    try {
+      const customer = customers.find(c => c.id === sale.customer_id) || null;
+      const product = products.find(p => p.id === sale.product_id) || null;
+      await generateInvoicePdf({ sale, customer, product });
+      toast('Invoice downloaded', 'success');
+    } catch (e) { console.error('Invoice PDF error:', e); toast('Error generating invoice', 'error'); }
+    finally { setPdfLoading(null); }
+  };
+
+  const handlePrintInvoice = async (sale: Sale) => {
+    setPdfLoading(sale.id);
+    try {
+      const customer = customers.find(c => c.id === sale.customer_id) || null;
+      const product = products.find(p => p.id === sale.product_id) || null;
+      await printInvoice({ sale, customer, product });
+    } catch (e) { console.error('Invoice print error:', e); toast('Error printing invoice', 'error'); }
+    finally { setPdfLoading(null); }
+  };
+
   const columns: Column<Sale>[] = [
     { key: 'invoice_number', header: 'Invoice #', sortable: true, render: (s) => <span className="font-medium text-forest-700">{s.invoice_number}</span> },
     { key: 'sale_date', header: 'Date', sortable: true, render: (s) => new Date(s.sale_date).toLocaleDateString() },
@@ -205,7 +263,16 @@ export const Sales = () => {
     { key: 'payment_received', header: 'Received', align: 'right', render: (s) => <span className="text-green-600">₹{Number(s.payment_received).toLocaleString('en-IN')}</span> },
     { key: 'outstanding_balance', header: 'Outstanding', align: 'right', render: (s) => <span className={Number(s.outstanding_balance) > 0 ? 'text-red-600 font-semibold' : ''}>₹{Number(s.outstanding_balance).toLocaleString('en-IN')}</span> },
     { key: 'status', header: 'Status', align: 'center', render: (s) => <Badge text={s.payment_status} color={s.payment_status === 'Paid' ? 'green' : 'amber'} /> },
-    { key: 'actions', header: '', align: 'center', render: (s) => editable && <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(s); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button> },
+    {
+      key: 'actions', header: '', align: 'center',
+      render: (s) => (
+        <div className="flex items-center justify-center gap-1">
+          <button onClick={(e) => { e.stopPropagation(); handlePrintInvoice(s); }} disabled={pdfLoading === s.id} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition disabled:opacity-50" title="Print Invoice"><Printer size={16} /></button>
+          <button onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(s); }} disabled={pdfLoading === s.id} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-50" title="Download Invoice"><Download size={16} /></button>
+          {editable && <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(s); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button>}
+        </div>
+      ),
+    },
   ];
 
   if (loading) return <LoadingState message="Loading sales..." />;
@@ -227,34 +294,58 @@ export const Sales = () => {
             <FormField label="Customer" required>
               <select value={formData.customer_id} onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })} className={inputClass} required>
                 <option value="">Select Customer</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.customer_id})</option>)}
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.customer_id}){c.state ? ` — ${c.state}` : ''}</option>)}
               </select>
             </FormField>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Product" required>
-              <select value={formData.product_id} onChange={(e) => { const p = products.find(p => p.id === e.target.value); setFormData({ ...formData, product_id: e.target.value, rate_per_kg: p ? String(p.sale_rate) : '' }); }} className={inputClass} required>
+              <select value={formData.product_id} onChange={(e) => handleProductChange(e.target.value)} className={inputClass} required>
                 <option value="">Select Product</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.product_type})</option>)}
+                {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.product_type}){p.hsn_code ? ` — HSN ${p.hsn_code}` : ''}</option>)}
               </select>
             </FormField>
             <FormField label={`Quantity (Kg) ${selectedProductName ? `(Available: ${currentStock} Kg)` : ''}`} required>
               <input type="number" step="0.01" value={formData.quantity_kg} onChange={(e) => setFormData({ ...formData, quantity_kg: e.target.value })} className={inputClass} max={currentStock} required disabled={!formData.product_id} />
             </FormField>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <FormField label="Rate per Kg" required><input type="number" step="0.01" value={formData.rate_per_kg} onChange={(e) => setFormData({ ...formData, rate_per_kg: e.target.value })} className={inputClass} required /></FormField>
-            <FormField label="Payment Received"><input type="number" step="0.01" value={formData.payment_received} onChange={(e) => setFormData({ ...formData, payment_received: e.target.value })} className={inputClass} /></FormField>
+            <FormField label="GST Rate (%)"><input type="number" step="0.01" value={formData.tax_rate} onChange={(e) => setFormData({ ...formData, tax_rate: e.target.value })} className={inputClass} /></FormField>
+            <FormField label="Discount (₹)"><input type="number" step="0.01" value={formData.discount} onChange={(e) => setFormData({ ...formData, discount: e.target.value })} className={inputClass} placeholder="0.00" /></FormField>
           </div>
-          <FormField label="Payment Date"><input type="date" value={formData.payment_date} onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })} className={inputClass} /></FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Payment Received"><input type="number" step="0.01" value={formData.payment_received} onChange={(e) => setFormData({ ...formData, payment_received: e.target.value })} className={inputClass} /></FormField>
+            <FormField label="Payment Date"><input type="date" value={formData.payment_date} onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })} className={inputClass} /></FormField>
+          </div>
           <FormField label="Remarks"><input type="text" value={formData.remarks} onChange={(e) => setFormData({ ...formData, remarks: e.target.value })} className={inputClass} /></FormField>
+
+          {selectedCustomer && businessState && customerState && (
+            <div className={`rounded-lg px-4 py-2 text-sm ${isInterState ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-blue-50 text-blue-800 border border-blue-200'}`}>
+              {isInterState
+                ? `Inter-state sale (Business: ${businessState}, Customer: ${customerState}) — IGST @ ${taxRate.toFixed(2)}% applies`
+                : `Intra-state sale (both in ${businessState}) — CGST + SGST @ ${(taxRate / 2).toFixed(2)}% each applies`}
+            </div>
+          )}
 
           <div className={`rounded-lg p-4 ${insufficientStock ? 'bg-red-50 border border-red-200' : 'bg-forest-50'}`}>
             {insufficientStock ? (
               <p className="text-sm font-medium text-red-700">Insufficient stock! Available: {currentStock} Kg, Requested: {quantity} Kg</p>
             ) : (
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="flex justify-between"><span className="text-gray-600">Total Amount:</span><span className="font-bold">₹{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                <div className="flex justify-between"><span className="text-gray-600">Gross Amount:</span><span className="font-medium">₹{grossAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Discount:</span><span className="font-medium">₹{discount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Taxable Value:</span><span className="font-medium">₹{taxableValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">GST ({taxRate.toFixed(2)}%):</span><span className="font-medium">₹{taxAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                {isInterState ? (
+                  <div className="flex justify-between"><span className="text-gray-600">IGST:</span><span className="font-medium">₹{igstAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                ) : (
+                  <>
+                    <div className="flex justify-between"><span className="text-gray-600">CGST ({(taxRate / 2).toFixed(2)}%):</span><span className="font-medium">₹{cgstAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">SGST ({(taxRate / 2).toFixed(2)}%):</span><span className="font-medium">₹{sgstAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                  </>
+                )}
+                <div className="flex justify-between col-span-2 border-t pt-1.5"><span className="text-gray-600 font-semibold">Total Invoice:</span><span className="font-bold text-forest-800">₹{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
                 <div className="flex justify-between"><span className="text-gray-600">Outstanding:</span><span className="font-bold text-red-600">₹{outstandingBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
               </div>
             )}

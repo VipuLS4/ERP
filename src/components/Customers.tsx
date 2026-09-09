@@ -27,7 +27,7 @@ export const Customers = () => {
   const [showForm, setShowForm] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
-  const [formData, setFormData] = useState({ name: '', mobile: '', address: '', opening_balance: '', status: 'Active', remarks: '' });
+  const [formData, setFormData] = useState({ name: '', mobile: '', address: '', state: '', opening_balance: '', status: 'Active', remarks: '' });
 
   useEffect(() => { loadCustomers(); }, []);
 
@@ -47,7 +47,7 @@ export const Customers = () => {
       const openingBal = parseFloat(formData.opening_balance) || 0;
       const { data: newCust, error } = await supabase.from('customers').insert({
         customer_id: customerId, name: formData.name, mobile: formData.mobile || null,
-        address: formData.address || null, opening_balance: openingBal, balance: openingBal,
+        address: formData.address || null, state: formData.state || null, opening_balance: openingBal, balance: openingBal,
         status: formData.status, remarks: formData.remarks || null,
       }).select().single();
       if (error) throw error;
@@ -63,7 +63,7 @@ export const Customers = () => {
       await logAudit('Customer created', 'Customers', customerId);
       toast('Customer created successfully', 'success');
       setShowForm(false);
-      setFormData({ name: '', mobile: '', address: '', opening_balance: '', status: 'Active', remarks: '' });
+      setFormData({ name: '', mobile: '', address: '', state: '', opening_balance: '', status: 'Active', remarks: '' });
       loadCustomers();
     } catch (e) { console.error('Error creating customer:', e); toast('Error creating customer', 'error'); }
   };
@@ -117,7 +117,10 @@ export const Customers = () => {
             <FormField label="Mobile Number"><input type="tel" value={formData.mobile} onChange={(e) => setFormData({ ...formData, mobile: e.target.value })} className={inputClass} /></FormField>
             <FormField label="Opening Balance"><input type="number" step="0.01" value={formData.opening_balance} onChange={(e) => setFormData({ ...formData, opening_balance: e.target.value })} className={inputClass} placeholder="0.00" /></FormField>
           </div>
-          <FormField label="Address"><textarea value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className={inputClass} rows={2} /></FormField>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="State"><input type="text" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} className={inputClass} placeholder="e.g. Maharashtra" /></FormField>
+            <FormField label="Address"><textarea value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className={inputClass} rows={2} /></FormField>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Status">
               <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className={inputClass}>
@@ -229,6 +232,7 @@ function CustomerDetail({ customer, onBack }: { customer: Customer; onBack: () =
               <div><span className="text-gray-500">Status:</span> <Badge text={customer.status || 'Active'} color={customer.status === 'Active' ? 'green' : 'gray'} /></div>
               <div><span className="text-gray-500">Opening Bal:</span> <span className="font-medium">{fmtINR(Number(customer.opening_balance))}</span></div>
               <div><span className="text-gray-500">Created:</span> <span className="font-medium">{new Date(customer.created_at).toLocaleDateString()}</span></div>
+              <div><span className="text-gray-500">State:</span> <span className="font-medium">{customer.state || '-'}</span></div>
               <div><span className="text-gray-500">Address:</span> <span className="font-medium">{customer.address || '-'}</span></div>
             </div>
           </div>

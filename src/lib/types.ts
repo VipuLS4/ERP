@@ -38,6 +38,8 @@ export interface Product {
   opening_stock_kg: number;
   minimum_stock_kg: number;
   sale_rate: number;
+  hsn_code: string | null;
+  gst_rate: number;
   is_active: boolean;
 }
 
@@ -98,6 +100,7 @@ export interface Customer {
   name: string;
   mobile: string | null;
   address: string | null;
+  state: string | null;
   balance: number;
   opening_balance: number;
   status: string;
@@ -203,6 +206,12 @@ export interface Sale {
   quantity_kg: number;
   rate_per_kg: number;
   total_amount: number;
+  tax_rate: number;
+  cgst_amount: number;
+  sgst_amount: number;
+  igst_amount: number;
+  is_inter_state: boolean;
+  customer_state: string | null;
   discount: number;
   tax_amount: number;
   other_charges: number;
@@ -341,6 +350,7 @@ export interface Settings {
   mobile: string | null;
   email: string | null;
   gst_number: string | null;
+  state: string | null;
   invoice_prefix: string;
   currency: string;
   opening_stock_value: number;

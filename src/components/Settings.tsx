@@ -14,6 +14,7 @@ interface SettingsData {
   mobile: string | null;
   email: string | null;
   gst_number: string | null;
+  state: string | null;
   invoice_prefix: string;
   currency: string;
   opening_stock_value: number;
@@ -64,6 +65,7 @@ export const Settings = () => {
         mobile: settings.mobile,
         email: settings.email,
         gst_number: settings.gst_number,
+        state: settings.state,
         invoice_prefix: settings.invoice_prefix,
         currency: settings.currency,
         opening_stock_value: settings.opening_stock_value,
@@ -107,6 +109,7 @@ export const Settings = () => {
           </div>
           <div className="grid grid-cols-2 gap-4 mt-4">
             <FormField label="GST Number"><input type="text" value={settings.gst_number || ''} disabled={!editable} onChange={(e) => setSettings({ ...settings, gst_number: e.target.value })} className={inputClass} /></FormField>
+            <FormField label="Business State"><input type="text" value={settings.state || ''} disabled={!editable} onChange={(e) => setSettings({ ...settings, state: e.target.value })} className={inputClass} placeholder="e.g. Maharashtra" /></FormField>
             <FormField label="Invoice Prefix"><input type="text" value={settings.invoice_prefix || ''} disabled={!editable} onChange={(e) => setSettings({ ...settings, invoice_prefix: e.target.value })} className={inputClass} /></FormField>
           </div>
         </div>
