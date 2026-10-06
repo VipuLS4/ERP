@@ -4,13 +4,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { canEdit } from '../lib/auth';
 import { logAudit, generateTransactionNumber } from '../lib/auth';
 import type { Employee, SalaryPayment } from '../lib/types';
-import { Plus, Trash2, Eye, DollarSign, History } from 'lucide-react';
+import { Plus, Trash2, DollarSign, History, Download } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { DataTable, type Column } from './ui/DataTable';
 import { PageHeader, Badge, FormField, inputClass, buttonClass } from './ui/Common';
 import { LoadingState, EmptyState } from './ui/States';
 import { useToast } from './ui/Toast';
+import { generateSalarySlipPdf } from '../lib/pdf';
 
 export const Salary = () => {
   const { role } = useAuth();
@@ -27,6 +28,7 @@ export const Salary = () => {
   const [deleteTarget, setDeleteTarget] = useState<SalaryPayment | null>(null);
   const [historyTarget, setHistoryTarget] = useState<SalaryPayment | null>(null);
   const [releasePayments, setReleasePayments] = useState<SalaryPayment[]>([]);
+  const [slipLoading, setSlipLoading] = useState<string | null>(null);
 
   const [employeeForm, setEmployeeForm] = useState({ name: '', mobile: '', designation: '', monthly_salary: '', joined_date: '' });
   const [salaryForm, setSalaryForm] = useState({
@@ -177,6 +179,20 @@ export const Salary = () => {
     setShowHistory(true);
   };
 
+  const downloadSalarySlip = async (salary: SalaryPayment) => {
+    const employee = employees.find(e => e.id === salary.employee_id);
+    if (!employee) return;
+    try {
+      setSlipLoading(salary.id);
+      await generateSalarySlipPdf(employee, salary);
+    } catch (e) {
+      console.error('Error generating salary slip:', e);
+      toast('Could not generate salary slip', 'error');
+    } finally {
+      setSlipLoading(null);
+    }
+  };
+
   const fmtINR = (n: number) => `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
   const recordColumns: Column<SalaryPayment>[] = [
@@ -195,6 +211,7 @@ export const Salary = () => {
         <div className="flex items-center justify-center gap-1">
           {editable && Number(p.balance) > 0 && <button onClick={(e) => { e.stopPropagation(); setReleaseForm({ ...releaseForm, salary_id: p.id }); setShowReleaseForm(true); }} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition" title="Release Salary"><DollarSign size={16} /></button>}
           <button onClick={(e) => { e.stopPropagation(); openHistory(p); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Payment History"><History size={16} /></button>
+          <button onClick={(e) => { e.stopPropagation(); downloadSalarySlip(p); }} disabled={slipLoading === p.id} className="p-1.5 text-forest-700 hover:bg-forest-50 rounded-lg transition disabled:opacity-50" title="Download Salary Slip"><Download size={16} /></button>
           {editable && <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button>}
         </div>
       ) : <Badge text="Release" color="gray" />,
@@ -205,6 +222,12 @@ export const Salary = () => {
 
   const salaryRecords = payments.filter(p => p.net_salary > 0);
   const releaseHistory = payments.filter(p => p.net_salary === 0 && p.amount_paid > 0);
+  const employeeOutstanding = employees.map(employee => {
+    const records = salaryRecords.filter(p => p.employee_id === employee.id);
+    const outstanding = records.reduce((sum, p) => sum + Math.max(0, Number(p.balance)), 0);
+    const nextSalary = records.find(p => Number(p.balance) > 0);
+    return { employee, outstanding, nextSalary };
+  }).filter(item => item.outstanding > 0);
 
   return (
     <div>
@@ -228,7 +251,31 @@ export const Salary = () => {
         ))}
       </div>
 
-      {activeTab === 'records' && (salaryRecords.length === 0 ? <EmptyState message="No salary records. Create a salary record for an employee!" /> : <DataTable columns={recordColumns} data={salaryRecords} searchKeys={['salary_number', 'month_year']} searchPlaceholder="Search salary records..." />)}
+      {activeTab === 'records' && (
+        <>
+          {employeeOutstanding.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+              <div className="p-4 border-b"><h2 className="text-xl font-bold text-gray-900">Employee Outstanding Salary</h2><p className="text-sm text-gray-500 mt-1">Pay the remaining balance for each employee.</p></div>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50"><tr><th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Employee</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">Designation</th><th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 uppercase">Outstanding</th><th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase">Action</th></tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {employeeOutstanding.map(({ employee, outstanding, nextSalary }) => (
+                      <tr key={employee.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5 text-sm font-medium">{employee.name} <span className="text-gray-400">({employee.employee_id})</span></td>
+                        <td className="px-4 py-2.5 text-sm text-gray-500">{employee.designation || '-'}</td>
+                        <td className="px-4 py-2.5 text-sm text-right font-semibold text-red-600">{fmtINR(outstanding)}</td>
+                        <td className="px-4 py-2.5 text-center">{editable && nextSalary ? <button onClick={() => { setReleaseForm({ ...releaseForm, salary_id: nextSalary.id, amount_paid: String(Number(nextSalary.balance)) }); setShowReleaseForm(true); }} className={buttonClass.success + ' px-3 py-1.5'}><DollarSign size={14} /> Pay Outstanding</button> : <Badge text="View only" color="gray" />}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {salaryRecords.length === 0 ? <EmptyState message="No salary records. Create a salary record for an employee!" /> : <DataTable columns={recordColumns} data={salaryRecords} searchKeys={['salary_number', 'month_year']} searchPlaceholder="Search salary records..." />}
+        </>
+      )}
 
       {activeTab === 'history' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

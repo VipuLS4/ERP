@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from './supabase';
-import type { Customer, Product, Sale, Settings } from './types';
+import type { Customer, Employee, Product, Sale, SalaryPayment, Settings } from './types';
 
 interface PdfOptions {
   title: string;
@@ -276,6 +276,50 @@ export async function printReport(opts: PdfOptions) {
   doc.autoPrint();
   const url = doc.output('bloburl');
   window.open(url, '_blank');
+}
+
+export async function generateSalarySlipPdf(employee: Employee, salary: SalaryPayment): Promise<void> {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const settings = await fetchSettings();
+  const logo = await loadLogo();
+  let y = await drawHeader(doc, 'Salary Slip', settings, logo);
+  const margin = 14;
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFontSize(10);
+  doc.setTextColor(55, 65, 81);
+  drawLabelValue(doc, 'Employee:', `${employee.name} (${employee.employee_id})`, margin, y + 6);
+  drawLabelValue(doc, 'Designation:', employee.designation || '-', margin, y + 13);
+  drawLabelValue(doc, 'Salary Month:', salary.month_year, pageWidth - 80, y + 6);
+  drawLabelValue(doc, 'Salary No:', salary.salary_number || '-', pageWidth - 80, y + 13);
+  y += 24;
+
+  autoTable(doc, {
+    head: [['Salary Component', 'Amount']],
+    body: [
+      ['Gross Salary', formatCurrency(Number(salary.gross_salary))],
+      ['Advance', formatCurrency(Number(salary.advance))],
+      ['Deduction', formatCurrency(Number(salary.deduction))],
+      ['Net Salary', formatCurrency(Number(salary.net_salary))],
+      ['Total Paid', formatCurrency(Number(salary.amount_paid))],
+      ['Outstanding Balance', formatCurrency(Number(salary.balance))],
+    ],
+    startY: y,
+    margin: { left: margin, right: margin },
+    styles: { fontSize: 10, cellPadding: 4 },
+    headStyles: { fillColor: [16, 43, 27], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [250, 247, 240] },
+    columnStyles: { 1: { halign: 'right' } },
+  });
+
+  const finalY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+  doc.setFontSize(9);
+  doc.setTextColor(107, 114, 128);
+  doc.text(`Payment method: ${salary.payment_method || 'Cash'}`, margin, finalY);
+  doc.text(`Last payment date: ${formatDate(salary.payment_date)}`, margin, finalY + 6);
+  doc.text('This is a computer-generated salary slip.', margin, finalY + 18);
+  drawFooter(doc, settings);
+  doc.save(`${employee.employee_id}_${salary.month_year.replace(/\\s+/g, '_')}_Salary_Slip.pdf`);
 }
 
 export async function generateInvoicePdf(opts: InvoicePdfOptions): Promise<void> {
