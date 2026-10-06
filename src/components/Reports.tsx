@@ -132,7 +132,7 @@ export const Reports = () => {
         data.customers = cRes.data || [];
       }
 
-      if (reportType === 'profit-summary' || reportType === 'sales-report' || reportType === 'expense-report') {
+      if (reportType === 'profit-summary' || reportType === 'sales-report' || reportType === 'expense-report' || reportType === 'gst-summary') {
         const [sRes, pRes, eRes] = await Promise.all([
           supabase.from('sales').select('*').gte('sale_date', start).lte('sale_date', end).order('sale_date', { ascending: false }),
           supabase.from('purchases').select('*, vendors(name)').gte('purchase_date', start).lte('purchase_date', end).order('purchase_date', { ascending: false }),
@@ -191,6 +191,7 @@ export const Reports = () => {
     { value: 'salary-report', label: 'Salary Report' },
     { value: 'profit-summary', label: 'Profit Summary' },
     { value: 'sales-report', label: 'Sales Report' },
+    { value: 'gst-summary', label: 'GST Summary Report' },
     { value: 'customer-outstanding', label: 'Customer Outstanding Report' },
     { value: 'expense-report', label: 'Expense Report' },
   ];
@@ -336,14 +337,13 @@ export const Reports = () => {
       }
       case 'customer-outstanding': {
         const sales = reportData.sales || [];
-        const customers = reportData.customers || [];
-        const rows = sales.map((s: any) => [s.invoice_number, new Date(s.sale_date).toLocaleDateString(), s.customer_name, s.product_name, fmt(Number(s.quantity_kg)), fmtINR(Number(s.total_amount)), fmtINR(Number(s.payment_received)), fmtINR(Number(s.outstanding_balance))]);
+        const rows = sales.map((s: any) => [s.invoice_number, new Date(s.sale_date).toLocaleDateString(), s.customer_name, s.product_name, fmt(Number(s.quantity_kg)), `${Number(s.tax_rate || 0)}%`, fmtINR(Number(s.total_amount)), fmtINR(Number(s.payment_received)), fmtINR(Number(s.outstanding_balance)), s.payment_status]);
         const totalInvoice = sales.reduce((s: number, sl: any) => s + Number(sl.total_amount), 0);
         const totalReceived = sales.reduce((s: number, sl: any) => s + Number(sl.payment_received), 0);
         const totalOutstanding = sales.reduce((s: number, sl: any) => s + Number(sl.outstanding_balance), 0);
         return {
           title: 'Customer Outstanding Report',
-          columns: ['Invoice #', 'Date', 'Customer', 'Product', 'Qty (Kg)', 'Invoice Value', 'Received', 'Outstanding'],
+          columns: ['Invoice #', 'Date', 'Customer', 'Product', 'Qty (Kg)', 'GST%', 'Invoice Value', 'Received', 'Outstanding', 'Status'],
           rows,
           fileName: 'Raj_Brothers_Customer_Outstanding_Report.pdf',
           landscape: true,
@@ -365,15 +365,35 @@ export const Reports = () => {
       }
       case 'sales-report': {
         const sales = reportData.sales || [];
-        const rows = sales.map((s: any) => [s.invoice_number, new Date(s.sale_date).toLocaleDateString(), s.customer_name, s.product_name, fmt(Number(s.quantity_kg)), fmtINR(Number(s.total_amount)), fmtINR(Number(s.outstanding_balance))]);
+        const rows = sales.map((s: any) => [s.invoice_number, new Date(s.sale_date).toLocaleDateString(), s.customer_name, s.product_name, fmt(Number(s.quantity_kg)), fmtINR(Number(s.rate_per_kg)), fmtINR(Number(s.tax_amount || 0)), `${Number(s.tax_rate || 0)}%`, s.is_inter_state ? 'IGST' : 'CGST+SGST', fmtINR(Number(s.total_amount)), fmtINR(Number(s.outstanding_balance))]);
         const totalSales = sales.reduce((s: number, sl: any) => s + Number(sl.total_amount), 0);
+        const totalTax = sales.reduce((s: number, sl: any) => s + Number(sl.tax_amount || 0), 0);
+        const totalTaxable = sales.reduce((s: number, sl: any) => s + (Number(sl.total_amount) - Number(sl.tax_amount || 0)), 0);
         return {
           title: 'Sales Report',
-          columns: ['Invoice #', 'Date', 'Customer', 'Product', 'Qty (Kg)', 'Total', 'Outstanding'],
+          columns: ['Invoice #', 'Date', 'Customer', 'Product', 'Qty (Kg)', 'Rate', 'GST', 'GST%', 'Type', 'Total', 'Outstanding'],
           rows,
           fileName: 'Raj_Brothers_Sales_Report.pdf',
           landscape: true,
-          summaryRows: [{ label: 'Total Sales', value: fmtINR(totalSales) }],
+          summaryRows: [{ label: 'Total Taxable Value', value: fmtINR(totalTaxable) }, { label: 'Total GST', value: fmtINR(totalTax) }, { label: 'Total Sales (incl. GST)', value: fmtINR(totalSales) }],
+        };
+      }
+      case 'gst-summary': {
+        const sales = reportData.sales || [];
+        const rows = sales.map((s: any) => [s.invoice_number, new Date(s.sale_date).toLocaleDateString(), s.customer_name, s.customer_state || '-', fmtINR(Number(s.total_amount) - Number(s.tax_amount || 0)), `${Number(s.tax_rate || 0)}%`, s.is_inter_state ? 'IGST' : 'CGST+SGST', fmtINR(Number(s.cgst_amount || 0)), fmtINR(Number(s.sgst_amount || 0)), fmtINR(Number(s.igst_amount || 0)), fmtINR(Number(s.tax_amount || 0)), fmtINR(Number(s.total_amount))]);
+        const totalCgst = sales.reduce((s: number, sl: any) => s + Number(sl.cgst_amount || 0), 0);
+        const totalSgst = sales.reduce((s: number, sl: any) => s + Number(sl.sgst_amount || 0), 0);
+        const totalIgst = sales.reduce((s: number, sl: any) => s + Number(sl.igst_amount || 0), 0);
+        const totalTax = totalCgst + totalSgst + totalIgst;
+        const totalTaxable = sales.reduce((s: number, sl: any) => s + (Number(sl.total_amount) - Number(sl.tax_amount || 0)), 0);
+        const totalInvoice = sales.reduce((s: number, sl: any) => s + Number(sl.total_amount), 0);
+        return {
+          title: 'GST Summary Report',
+          columns: ['Invoice #', 'Date', 'Customer', 'Place', 'Taxable Value', 'GST%', 'Type', 'CGST', 'SGST', 'IGST', 'Total Tax', 'Invoice Total'],
+          rows,
+          fileName: 'Raj_Brothers_GST_Summary_Report.pdf',
+          landscape: true,
+          summaryRows: [{ label: 'Total Taxable Value', value: fmtINR(totalTaxable) }, { label: 'Total CGST', value: fmtINR(totalCgst) }, { label: 'Total SGST', value: fmtINR(totalSgst) }, { label: 'Total IGST', value: fmtINR(totalIgst) }, { label: 'Total Tax', value: fmtINR(totalTax) }, { label: 'Total Invoice Value', value: fmtINR(totalInvoice) }],
         };
       }
       case 'expense-report': {
