@@ -162,7 +162,10 @@ export const Dashboard = () => {
 
   if (loading) return <LoadingState message="Loading dashboard..." />;
 
-  const fmt = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const fmt = (n: number) => new Intl.NumberFormat('en-IN', {
+    useGrouping: true,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(n) ? n : 0);
   const fmtINR = (n: number) => `₹${fmt(n)}`;
 
   const dateFilterButtons: { key: DateFilter; label: string }[] = [
