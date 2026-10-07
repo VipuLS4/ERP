@@ -32,6 +32,7 @@ const ALL_MENU_ITEMS: MenuItem[] = [
   { id: 'sales', label: 'Sales / Invoices', icon: Receipt },
   { id: 'expenses', label: 'Expenses', icon: DollarSign },
   { id: 'employees', label: 'Employees', icon: Wallet },
+  { id: 'salary', label: 'Salary Management', icon: DollarSign },
   { id: 'reports', label: 'Reports', icon: FileText },
   { id: 'user-management', label: 'User Management', icon: UserCog },
   { id: 'settings', label: 'Settings', icon: Settings },
