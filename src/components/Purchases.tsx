@@ -11,6 +11,7 @@ import { DataTable, type Column } from './ui/DataTable';
 import { PageHeader, Badge, FormField, inputClass, buttonClass } from './ui/Common';
 import { LoadingState, EmptyState } from './ui/States';
 import { useToast } from './ui/Toast';
+import { formatINR } from '../lib/format';
 
 export const Purchases = () => {
   const { role } = useAuth();
@@ -182,10 +183,10 @@ export const Purchases = () => {
     { key: 'product_name', header: 'Product', render: (p) => <Badge text={p.product_name || 'Rice Bran'} color="blue" /> },
     { key: 'vehicle_number', header: 'Vehicle', render: (p) => p.vehicle_number || '-' },
     { key: 'quantity_kg', header: 'Qty (Kg)', align: 'right', sortable: true, render: (p) => Number(p.quantity_kg).toLocaleString('en-IN') },
-    { key: 'rate_per_kg', header: 'Rate/Kg', align: 'right', render: (p) => `₹${Number(p.rate_per_kg).toLocaleString('en-IN')}` },
-    { key: 'total_amount', header: 'Total', align: 'right', sortable: true, render: (p) => <span className="font-semibold">₹{Number(p.total_amount).toLocaleString('en-IN')}</span> },
-    { key: 'payment_made', header: 'Paid', align: 'right', render: (p) => <span className="text-green-600">₹{Number(p.payment_made).toLocaleString('en-IN')}</span> },
-    { key: 'balance_amount', header: 'Balance', align: 'right', render: (p) => <span className="font-semibold text-red-600">₹{Number(p.balance_amount).toLocaleString('en-IN')}</span> },
+    { key: 'rate_per_kg', header: 'Rate/Kg', align: 'right', render: (p) => formatINR(Number(p.rate_per_kg)) },
+    { key: 'total_amount', header: 'Total', align: 'right', sortable: true, render: (p) => <span className="font-semibold">{formatINR(Number(p.total_amount))}</span> },
+    { key: 'payment_made', header: 'Paid', align: 'right', render: (p) => <span className="text-green-600">{formatINR(Number(p.payment_made))}</span> },
+    { key: 'balance_amount', header: 'Balance', align: 'right', render: (p) => <span className="font-semibold text-red-600">{formatINR(Number(p.balance_amount))}</span> },
     { key: 'status', header: 'Status', align: 'center', render: (p) => <Badge text={p.status || 'Approved'} color="green" /> },
     { key: 'actions', header: '', align: 'center', render: (p) => editable && <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button> },
   ];
@@ -235,8 +236,8 @@ export const Purchases = () => {
           <FormField label="Remarks"><input type="text" value={formData.remarks} onChange={(e) => setFormData({ ...formData, remarks: e.target.value })} className={inputClass} /></FormField>
 
           <div className="bg-blue-50 rounded-lg p-4 space-y-1.5 text-sm">
-            <div className="flex justify-between"><span className="text-gray-600">Total Amount:</span><span className="font-bold">₹{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
-            <div className="flex justify-between"><span className="text-gray-600">Outstanding Balance:</span><span className="font-bold text-red-600">₹{balanceAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+            <div className="flex justify-between"><span className="text-gray-600">Total Amount:</span><span className="font-bold">{formatINR(totalAmount)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-600">Outstanding Balance:</span><span className="font-bold text-red-600">{formatINR(balanceAmount)}</span></div>
           </div>
 
           <div className="flex gap-3 pt-2">

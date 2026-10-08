@@ -4,12 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { canAccess } from '../lib/auth';
 import type { RoleKey } from '../lib/types';
 import {
-  TrendingUp, TrendingDown, Package, DollarSign, Users, Receipt,
-  Factory, AlertTriangle, Landmark, ArrowUpRight,
+  TrendingUp, TrendingDown, Package, Users, Receipt,
+  Factory, AlertTriangle, Landmark, ArrowUpRight, IndianRupee,
   ShoppingCart,
 } from 'lucide-react';
 import { StatCard } from './ui/Common';
 import { LoadingState } from './ui/States';
+import { formatINR } from '../lib/format';
 
 type DateFilter = 'today' | 'week' | 'month' | 'year' | 'all';
 
@@ -166,7 +167,7 @@ export const Dashboard = () => {
     useGrouping: true,
     maximumFractionDigits: 2,
   }).format(Number.isFinite(n) ? n : 0);
-  const fmtINR = (n: number) => `₹${fmt(n)}`;
+  const fmtINR = (n: number) => formatINR(n);
 
   const dateFilterButtons: { key: DateFilter; label: string }[] = [
     { key: 'today', label: 'Today' },
@@ -230,7 +231,7 @@ export const Dashboard = () => {
           <StatCard title="Today's Sales" value={fmtINR(stats.todaySales)} icon={<Receipt size={20} />} color="#10B981" />
           <StatCard title="Today's Purchases" value={fmtINR(stats.todayPurchases)} icon={<ShoppingCart size={20} />} color="#3B82F6" />
           <StatCard title="Today's Production" value={`${fmt(stats.todayProduction)} Kg`} icon={<Factory size={20} />} color="#8B5CF6" />
-          <StatCard title="Today's Expenses" value={fmtINR(stats.todayExpenses)} icon={<DollarSign size={20} />} color="#F59E0B" />
+          <StatCard title="Today's Expenses" value={fmtINR(stats.todayExpenses)} icon={<IndianRupee size={20} />} color="#F59E0B" />
         </div>
       )}
 
@@ -246,7 +247,7 @@ export const Dashboard = () => {
           <StatCard title="Current Stock" value={`${fmt(stats.currentStock)} Kg`} icon={<Package size={20} />} color="#3B82F6" />
         )}
         {showFinancial && (
-          <StatCard title="Net Profit" value={fmtINR(stats.netProfit)} icon={<DollarSign size={20} />} color={stats.netProfit >= 0 ? '#10B981' : '#EF4444'} />
+          <StatCard title="Net Profit" value={fmtINR(stats.netProfit)} icon={<IndianRupee size={20} />} color={stats.netProfit >= 0 ? '#10B981' : '#EF4444'} />
         )}
         {showProduction && (
           <StatCard title="Production (Period)" value={`${fmt(stats.monthlyProduction)} Kg`} icon={<Factory size={20} />} color="#8B5CF6" />
@@ -271,10 +272,10 @@ export const Dashboard = () => {
               <h3 className="text-sm font-semibold text-gray-900">Cash & Bank</h3>
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">Cash</span><span className="font-semibold">₹{fmt(stats.cashBalance)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Bank</span><span className="font-semibold">₹{fmt(stats.bankBalance)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">UPI</span><span className="font-semibold">₹{fmt(stats.upiBalance)}</span></div>
-              <div className="flex justify-between border-t pt-2"><span className="font-medium text-gray-900">Total</span><span className="font-bold text-blue-600">₹{fmt(stats.cashBalance + stats.bankBalance + stats.upiBalance)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Cash</span><span className="font-semibold">{fmtINR(stats.cashBalance)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Bank</span><span className="font-semibold">{fmtINR(stats.bankBalance)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">UPI</span><span className="font-semibold">{fmtINR(stats.upiBalance)}</span></div>
+              <div className="flex justify-between border-t pt-2"><span className="font-medium text-gray-900">Total</span><span className="font-bold text-blue-600">{fmtINR(stats.cashBalance + stats.bankBalance + stats.upiBalance)}</span></div>
             </div>
           </div>
 
@@ -284,22 +285,22 @@ export const Dashboard = () => {
               <h3 className="text-sm font-semibold text-gray-900">Payables & Receivables</h3>
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">Vendor Payables</span><span className="font-semibold text-red-600">₹{fmt(stats.vendorPayables)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Customer Receivables</span><span className="font-semibold text-green-600">₹{fmt(stats.customerReceivables)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Vendor Payables</span><span className="font-semibold text-red-600">{fmtINR(stats.vendorPayables)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Customer Receivables</span><span className="font-semibold text-green-600">{fmtINR(stats.customerReceivables)}</span></div>
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <div className="flex items-center gap-2 mb-3">
-              <DollarSign size={18} className="text-green-600" />
+              <IndianRupee size={18} className="text-green-600" />
               <h3 className="text-sm font-semibold text-gray-900">Profit Summary</h3>
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">Sales</span><span className="font-semibold text-green-600">+ ₹{fmt(stats.totalSales)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Purchases</span><span className="font-semibold text-red-600">- ₹{fmt(stats.totalPurchases)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Expenses</span><span className="font-semibold text-red-600">- ₹{fmt(stats.totalExpenses)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Salaries</span><span className="font-semibold text-red-600">- ₹{fmt(stats.totalSalaries)}</span></div>
-              <div className="flex justify-between border-t pt-2"><span className="font-bold text-gray-900">Net Profit</span><span className={`font-bold ${stats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>₹{fmt(stats.netProfit)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Sales</span><span className="font-semibold text-green-600">+ {fmtINR(stats.totalSales)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Purchases</span><span className="font-semibold text-red-600">- {fmtINR(stats.totalPurchases)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Expenses</span><span className="font-semibold text-red-600">- {fmtINR(stats.totalExpenses)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Salaries</span><span className="font-semibold text-red-600">- {fmtINR(stats.totalSalaries)}</span></div>
+              <div className="flex justify-between border-t pt-2"><span className="font-bold text-gray-900">Net Profit</span><span className={`font-bold ${stats.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmtINR(stats.netProfit)}</span></div>
             </div>
           </div>
         </div>
@@ -357,7 +358,7 @@ function MiniBarChart({ data, color }: { data: { date: string; amount: number }[
               style={{ height: `${(d.amount / max) * 120}px`, backgroundColor: color, minHeight: '2px' }}
             />
             <div className="absolute -top-6 opacity-0 group-hover:opacity-100 transition bg-gray-900 text-white text-xs px-2 py-0.5 rounded whitespace-nowrap pointer-events-none z-10">
-              ₹{d.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+              {formatINR(d.amount, { maximumFractionDigits: 0 })}
             </div>
           </div>
           <span className="text-[9px] text-gray-400">{d.date.slice(5)}</span>

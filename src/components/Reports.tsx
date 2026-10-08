@@ -5,6 +5,7 @@ import { PageHeader, Badge, inputClass, buttonClass } from './ui/Common';
 import { LoadingState, EmptyState } from './ui/States';
 import { generatePdfReport, printReport } from '../lib/pdf';
 import { useToast } from './ui/Toast';
+import { formatINR, formatNumber } from '../lib/format';
 
 interface Vendor { id: string; vendor_id: string; name: string; mobile: string | null; balance: number; opening_balance: number; }
 interface Customer { id: string; customer_id: string; name: string; mobile: string | null; balance: number; opening_balance: number; }
@@ -148,8 +149,8 @@ export const Reports = () => {
     finally { setLoading(false); }
   };
 
-  const fmtINR = (n: number) => `₹${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-  const fmt = (n: number) => Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const fmtINR = (n: number) => formatINR(n);
+  const fmt = (n: number) => formatNumber(n);
 
   const getVendorName = () => vendors.find(v => v.id === selectedVendor)?.name || 'All Vendors';
   const getEmployeeName = () => employees.find(e => e.id === selectedEmployee)?.name || 'All Employees';
@@ -413,12 +414,20 @@ export const Reports = () => {
   };
 
   const config = getReportConfig();
+  const amountColumn = (column: string) => /amount|value|total|payment|purchase|balance|rate|received|outstanding|salary|released|tax|revenue|cost|profit|expense|invoice/i.test(column);
 
   return (
     <div>
       <PageHeader title="Reports" subtitle="Business intelligence and financial reports" />
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Report filters</p>
+            <p className="text-xs text-gray-500 mt-0.5">Choose a report and period to view a clean business summary.</p>
+          </div>
+          <FileText size={20} className="text-forest-600" />
+        </div>
         <div className="flex flex-col lg:flex-row gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-1.5">Report Type</label>
@@ -472,15 +481,21 @@ export const Reports = () => {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <p className="text-sm text-gray-500">Showing {config.rows.length} {config.rows.length === 1 ? 'record' : 'records'}</p>
+        <div className="flex gap-2">
         <button onClick={() => handleDownloadPdf(config)} disabled={pdfLoading || loading} className={buttonClass.primary + ' disabled:opacity-50'}><Download size={16} /> {pdfLoading ? 'Generating...' : 'Download PDF'}</button>
-        <button onClick={() => handlePrint(config)} disabled={pdfLoading || loading} className={buttonClass.secondary + ' disabled:opacity-50'}><Printer size={16} /> Print Report</button>
+          <button onClick={() => handlePrint(config)} disabled={pdfLoading || loading} className={buttonClass.secondary + ' disabled:opacity-50'}><Printer size={16} /> Print Report</button>
+        </div>
       </div>
 
       {loading ? <LoadingState message="Loading report..." /> : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-900">{config.title}</h2>
+          <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-forest-700">Business report</p>
+              <h2 className="text-xl font-bold text-gray-900 mt-1">{config.title}</h2>
+            </div>
             <FileText size={24} className="text-forest-600" />
           </div>
           {config.rows.length === 0 ? <EmptyState message="No data found for the selected filters" /> : (
@@ -491,21 +506,21 @@ export const Reports = () => {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50"><tr>
-                    {config.columns.map((col, i) => <th key={i} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase">{col}</th>)}
+                    {config.columns.map((col, i) => <th key={i} className={`px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap ${amountColumn(col) ? 'text-right' : 'text-left'}`}>{col}</th>)}
                   </tr></thead>
                   <tbody className="divide-y divide-gray-100">
                     {config.rows.map((row, i) => (
                       <tr key={i} className="hover:bg-gray-50">
-                        {row.map((cell, j) => <td key={j} className="px-4 py-2.5 text-sm">{cell}</td>)}
+                        {row.map((cell, j) => <td key={j} className={`px-4 py-3 text-sm text-gray-700 whitespace-nowrap ${amountColumn(config.columns[j] || '') ? 'text-right tabular-nums' : ''}`}>{cell}</td>)}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               {config.summaryRows && config.summaryRows.length > 0 && (
-                <div className="p-4 border-t bg-forest-50 space-y-1">
+                <div className="ml-auto max-w-md p-5 border-t bg-forest-50 space-y-2">
                   {config.summaryRows.map((s, i) => (
-                    <div key={i} className="flex justify-between text-sm"><span className="text-gray-600 font-medium">{s.label}</span><span className="font-bold text-forest-800">{s.value}</span></div>
+                    <div key={i} className={`flex items-center justify-between gap-8 text-sm ${i === config.summaryRows!.length - 1 ? 'border-t border-forest-200 pt-2 mt-3' : ''}`}><span className="text-gray-600 font-medium">{s.label}</span><span className="font-bold text-forest-800 tabular-nums">{s.value}</span></div>
                   ))}
                 </div>
               )}

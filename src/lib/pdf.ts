@@ -49,7 +49,11 @@ async function fetchSettings(): Promise<Settings | null> {
 }
 
 function formatCurrency(value: number): string {
-  return `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `Rs. ${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function normalizePdfText(value: string | number): string {
+  return String(value).replace(/₹/g, 'Rs. ');
 }
 
 function formatDate(value: string): string {
@@ -137,7 +141,7 @@ async function buildDoc(opts: PdfOptions): Promise<jsPDF> {
 
   autoTable(doc, {
     head: [opts.columns],
-    body: opts.rows.map((r) => r.map((c) => String(c))),
+    body: opts.rows.map((r) => r.map((c) => normalizePdfText(c))),
     startY: y,
     margin: { left: margin, right: margin },
     styles: { fontSize: 8, cellPadding: 2 },
@@ -154,7 +158,7 @@ async function buildDoc(opts: PdfOptions): Promise<jsPDF> {
     doc.setTextColor(16, 43, 27);
     for (const s of opts.summaryRows) {
       doc.text(s.label, pageWidth - margin - 60, afterY);
-      doc.text(s.value, pageWidth - margin, afterY, { align: 'right' });
+      doc.text(normalizePdfText(s.value), pageWidth - margin, afterY, { align: 'right' });
       afterY += 6;
     }
   }

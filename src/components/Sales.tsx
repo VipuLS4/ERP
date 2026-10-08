@@ -12,6 +12,7 @@ import { PageHeader, Badge, FormField, inputClass, buttonClass } from './ui/Comm
 import { LoadingState, EmptyState } from './ui/States';
 import { useToast } from './ui/Toast';
 import { generateInvoicePdf, printInvoice } from '../lib/pdf';
+import { formatINR } from '../lib/format';
 
 export const Sales = () => {
   const { role } = useAuth();
@@ -258,10 +259,10 @@ export const Sales = () => {
     { key: 'customer_name', header: 'Customer', render: (s) => s.customer_name },
     { key: 'product_name', header: 'Product', render: (s) => <Badge text={s.product_name} color="blue" /> },
     { key: 'quantity_kg', header: 'Qty (Kg)', align: 'right', sortable: true, render: (s) => Number(s.quantity_kg).toLocaleString('en-IN') },
-    { key: 'rate_per_kg', header: 'Rate/Kg', align: 'right', render: (s) => `₹${Number(s.rate_per_kg).toLocaleString('en-IN')}` },
-    { key: 'total_amount', header: 'Total', align: 'right', sortable: true, render: (s) => <span className="font-semibold">₹{Number(s.total_amount).toLocaleString('en-IN')}</span> },
-    { key: 'payment_received', header: 'Received', align: 'right', render: (s) => <span className="text-green-600">₹{Number(s.payment_received).toLocaleString('en-IN')}</span> },
-    { key: 'outstanding_balance', header: 'Outstanding', align: 'right', render: (s) => <span className={Number(s.outstanding_balance) > 0 ? 'text-red-600 font-semibold' : ''}>₹{Number(s.outstanding_balance).toLocaleString('en-IN')}</span> },
+    { key: 'rate_per_kg', header: 'Rate/Kg', align: 'right', render: (s) => formatINR(Number(s.rate_per_kg)) },
+    { key: 'total_amount', header: 'Total', align: 'right', sortable: true, render: (s) => <span className="font-semibold">{formatINR(Number(s.total_amount))}</span> },
+    { key: 'payment_received', header: 'Received', align: 'right', render: (s) => <span className="text-green-600">{formatINR(Number(s.payment_received))}</span> },
+    { key: 'outstanding_balance', header: 'Outstanding', align: 'right', render: (s) => <span className={Number(s.outstanding_balance) > 0 ? 'text-red-600 font-semibold' : ''}>{formatINR(Number(s.outstanding_balance))}</span> },
     { key: 'status', header: 'Status', align: 'center', render: (s) => <Badge text={s.payment_status} color={s.payment_status === 'Paid' ? 'green' : 'amber'} /> },
     {
       key: 'actions', header: '', align: 'center',
@@ -333,20 +334,20 @@ export const Sales = () => {
               <p className="text-sm font-medium text-red-700">Insufficient stock! Available: {currentStock} Kg, Requested: {quantity} Kg</p>
             ) : (
               <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                <div className="flex justify-between"><span className="text-gray-600">Gross Amount:</span><span className="font-medium">₹{grossAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600">Discount:</span><span className="font-medium">₹{discount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600">Taxable Value:</span><span className="font-medium">₹{taxableValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600">GST ({taxRate.toFixed(2)}%):</span><span className="font-medium">₹{taxAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Gross Amount:</span><span className="font-medium">{formatINR(grossAmount)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Discount:</span><span className="font-medium">{formatINR(discount)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Taxable Value:</span><span className="font-medium">{formatINR(taxableValue)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">GST ({taxRate.toFixed(2)}%):</span><span className="font-medium">{formatINR(taxAmount)}</span></div>
                 {isInterState ? (
-                  <div className="flex justify-between"><span className="text-gray-600">IGST:</span><span className="font-medium">₹{igstAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-600">IGST:</span><span className="font-medium">{formatINR(igstAmount)}</span></div>
                 ) : (
                   <>
-                    <div className="flex justify-between"><span className="text-gray-600">CGST ({(taxRate / 2).toFixed(2)}%):</span><span className="font-medium">₹{cgstAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">SGST ({(taxRate / 2).toFixed(2)}%):</span><span className="font-medium">₹{sgstAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">CGST ({(taxRate / 2).toFixed(2)}%):</span><span className="font-medium">{formatINR(cgstAmount)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">SGST ({(taxRate / 2).toFixed(2)}%):</span><span className="font-medium">{formatINR(sgstAmount)}</span></div>
                   </>
                 )}
-                <div className="flex justify-between col-span-2 border-t pt-1.5"><span className="text-gray-600 font-semibold">Total Invoice:</span><span className="font-bold text-forest-800">₹{totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600">Outstanding:</span><span className="font-bold text-red-600">₹{outstandingBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between col-span-2 border-t pt-1.5"><span className="text-gray-600 font-semibold">Total Invoice:</span><span className="font-bold text-forest-800">{formatINR(totalAmount)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-600">Outstanding:</span><span className="font-bold text-red-600">{formatINR(outstandingBalance)}</span></div>
               </div>
             )}
           </div>
