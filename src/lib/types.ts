@@ -126,6 +126,8 @@ export interface Purchase {
   purchase_number: string | null;
   purchase_date: string;
   vendor_id: string;
+  product_id: string | null;
+  product_name: string | null;
   vendors?: { name: string; vendor_id: string };
   quantity_kg: number;
   rate_per_kg: number;

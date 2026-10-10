@@ -302,7 +302,7 @@ function EmployeeDetail({ employee, payments, onBack }: { employee: Employee; pa
     if (!deleteTarget) return;
     try {
       await supabase.from('salary_payments').delete().eq('id', deleteTarget.id);
-      await logAudit('Salary record deleted', 'Salary', deleteTarget.salary_number);
+      await logAudit('Salary record deleted', 'Salary', deleteTarget.salary_number || undefined);
       toast('Salary record deleted', 'success');
       reloadDetailData();
     } catch (e) { console.error('Error deleting salary record:', e); toast('Error deleting record', 'error'); }

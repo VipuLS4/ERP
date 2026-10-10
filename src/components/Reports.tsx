@@ -1,14 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { FileText, Download, Printer } from 'lucide-react';
-import { PageHeader, Badge, inputClass, buttonClass } from './ui/Common';
+import { PageHeader, inputClass, buttonClass } from './ui/Common';
 import { LoadingState, EmptyState } from './ui/States';
 import { generatePdfReport, printReport } from '../lib/pdf';
 import { useToast } from './ui/Toast';
 import { formatINR, formatNumber } from '../lib/format';
 
 interface Vendor { id: string; vendor_id: string; name: string; mobile: string | null; balance: number; opening_balance: number; }
-interface Customer { id: string; customer_id: string; name: string; mobile: string | null; balance: number; opening_balance: number; }
 interface Employee { id: string; employee_id: string; name: string; }
 
 export const Reports = () => {
@@ -16,15 +15,13 @@ export const Reports = () => {
   const [reportType, setReportType] = useState('vendor-ledger');
   const [loading, setLoading] = useState(true);
   const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [selectedVendor, setSelectedVendor] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedMonth] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [reportData, setReportData] = useState<any>({});
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -47,16 +44,12 @@ export const Reports = () => {
 
   const loadInitialData = async () => {
     try {
-      const [vRes, cRes, eRes, pRes] = await Promise.all([
+      const [vRes, eRes] = await Promise.all([
         supabase.from('vendors').select('*').order('name'),
-        supabase.from('customers').select('*').order('name'),
         supabase.from('employees').select('*').order('name'),
-        supabase.from('products').select('*'),
       ]);
       setVendors(vRes.data || []);
-      setCustomers(cRes.data || []);
       setEmployees(eRes.data || []);
-      setProducts(pRes.data || []);
     } catch (e) { console.error('Error loading initial data:', e); }
   };
 
@@ -125,12 +118,8 @@ export const Reports = () => {
       }
 
       if (reportType === 'customer-outstanding') {
-        const [sRes, cRes] = await Promise.all([
-          supabase.from('sales').select('*').gte('sale_date', start).lte('sale_date', end).order('sale_date', { ascending: false }),
-          supabase.from('customers').select('*').order('name'),
-        ]);
+        const sRes = await supabase.from('sales').select('*').gte('sale_date', start).lte('sale_date', end).order('sale_date', { ascending: false });
         data.sales = sRes.data || [];
-        data.customers = cRes.data || [];
       }
 
       if (reportType === 'profit-summary' || reportType === 'sales-report' || reportType === 'expense-report' || reportType === 'gst-summary') {

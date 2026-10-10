@@ -20,6 +20,7 @@ interface UserProfile {
   department: string | null;
   status: string;
   last_login: string | null;
+  role_id: string | null;
   roles?: { role_key: RoleKey; role_name: string } | null;
 }
 

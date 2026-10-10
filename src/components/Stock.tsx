@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Package, TrendingUp, TrendingDown, Layers, Scale } from 'lucide-react';
+import { Package, Layers } from 'lucide-react';
 import { PageHeader, Badge } from './ui/Common';
 import { LoadingState, EmptyState } from './ui/States';
 import { DataTable, type Column } from './ui/DataTable';

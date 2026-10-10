@@ -58,7 +58,6 @@ export const Purchases = () => {
   };
 
   const selectedProduct = products.find(p => p.id === formData.product_id);
-  const selectedProductName = selectedProduct?.name || '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,7 +153,6 @@ export const Purchases = () => {
 
       // Use the product from the purchase record, not hardcoded 'Rice Bran'
       const productName = deleteTarget.product_name || 'Rice Bran';
-      const productId = deleteTarget.product_id;
       const { data: stockData } = await supabase.from('stock')
         .select('id, current_stock_kg')
         .eq('product_name', productName)
