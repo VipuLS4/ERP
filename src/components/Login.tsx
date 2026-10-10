@@ -18,9 +18,9 @@ import {
 const industrialImage = 'https://images.pexels.com/photos/2496592/pexels-photo-2496592.jpeg?auto=compress&cs=tinysrgb&h=650&w=940';
 
 const brothers = [
-  { name: 'Raj', role: 'Growth & Execution', image: '/02c81547-a589-43a1-bd87-785812fd4dd2.jpg', position: 'center 28%' },
-  { name: 'Atul', role: 'Operations Excellence', image: '/5f73bbfd-4c54-4acf-b5e1-709302ed13de.jpg', position: 'center 32%' },
+    { name: 'Atul', role: 'Operations Excellence', image: '/5f73bbfd-4c54-4acf-b5e1-709302ed13de.jpg', position: 'center 32%' },
   { name: 'Vipul', role: 'Technology & Systems', image: '/c38528f7-261e-4f93-b443-089545ee2c9c.jpg', position: 'center 28%' },
+  { name: 'Raj', role: 'Growth & Execution', image: '/02c81547-a589-43a1-bd87-785812fd4dd2.jpg', position: 'center 28%' },
 ];
 
 const modules = [
