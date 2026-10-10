@@ -18,9 +18,9 @@ import {
 const industrialImage = 'https://images.pexels.com/photos/2496592/pexels-photo-2496592.jpeg?auto=compress&cs=tinysrgb&h=650&w=940';
 
 const brothers = [
-  { name: 'Atul', role: 'Operations Excellence', initials: 'A' },
-  { name: 'Vipul', role: 'Technology & Systems', initials: 'V' },
-  { name: 'Raj', role: 'Growth & Execution', initials: 'R' },
+  { name: 'Atul', role: 'Operations Excellence', image: '/02c81547-a589-43a1-bd87-785812fd4dd2.jpg', position: 'center 28%' },
+  { name: 'Vipul', role: 'Technology & Systems', image: '/5f73bbfd-4c54-4acf-b5e1-709302ed13de.jpg', position: 'center 32%' },
+  { name: 'Raj', role: 'Growth & Execution', image: '/c38528f7-261e-4f93-b443-089545ee2c9c.jpg', position: 'center 28%' },
 ];
 
 const modules = [
@@ -86,9 +86,7 @@ export const Login = () => {
             {brothers.map((brother) => (
               <div key={brother.name} className="group rounded-2xl border border-white/15 bg-forest-900/65 p-3 backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-brand-300/60 hover:bg-forest-900/80 xl:p-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-300/70 bg-brand-300/15 text-xl font-semibold text-brand-300 shadow-inner xl:h-14 xl:w-14">
-                    {brother.initials}
-                  </div>
+                  <img src={brother.image} alt={`${brother.name}, ${brother.role}`} className="h-12 w-12 shrink-0 rounded-full border border-brand-300/70 object-cover shadow-inner xl:h-14 xl:w-14" style={{ objectPosition: brother.position }} />
                   <div className="min-w-0">
                     <p className="font-serif text-xl italic text-brand-300 xl:text-2xl">{brother.name}</p>
                     <p className="mt-0.5 text-[10px] leading-4 text-white/70 xl:text-xs">{brother.role}</p>
