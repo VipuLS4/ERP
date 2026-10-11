@@ -2,15 +2,18 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   ArrowRight,
+  BadgeCheck,
   Boxes,
   Eye,
   EyeOff,
   Factory,
   FileText,
+  Leaf,
   LockKeyhole,
   Mail,
   ShoppingCart,
   TrendingUp,
+  Gauge,
   Users,
   Wheat,
 } from 'lucide-react';
@@ -18,9 +21,15 @@ import {
 const industrialImage = 'https://images.pexels.com/photos/2496592/pexels-photo-2496592.jpeg?auto=compress&cs=tinysrgb&h=650&w=940';
 
 const brothers = [
-    { name: 'Atul', role: 'Operations Excellence', image: '/5f73bbfd-4c54-4acf-b5e1-709302ed13de.jpg', position: 'center 32%' },
-  { name: 'Vipul', role: 'Technology & Systems', image: '/c38528f7-261e-4f93-b443-089545ee2c9c.jpg', position: 'center 28%' },
-  { name: 'Raj', role: 'Growth & Execution', image: '/02c81547-a589-43a1-bd87-785812fd4dd2.jpg', position: 'center 28%' },
+  { name: 'Atul', role: 'Operations Excellence', image: '/02c81547-a589-43a1-bd87-785812fd4dd2.jpg', position: 'center 28%' },
+  { name: 'Vipul', role: 'Technology & Systems', image: '/5f73bbfd-4c54-4acf-b5e1-709302ed13de.jpg', position: 'center 32%' },
+  { name: 'Raj', role: 'Growth & Execution', image: '/c38528f7-261e-4f93-b443-089545ee2c9c.jpg', position: 'center 28%' },
+];
+
+const indicators = [
+  { label: 'Quality Products', icon: BadgeCheck },
+  { label: 'Efficient Operations', icon: Gauge },
+  { label: 'Sustainable Growth', icon: Leaf },
 ];
 
 const modules = [
@@ -60,7 +69,7 @@ export const Login = () => {
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_78%_20%,rgba(232,180,74,.18),transparent_30%),linear-gradient(to_top,rgba(5,24,14,.94),transparent_48%)]" />
 
         <div className="relative max-w-2xl">
-          <div className="mb-14 flex items-center gap-4">
+          <div className="mb-8 flex items-center gap-4 sm:mb-12">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-300/50 bg-forest-900/70 shadow-lg backdrop-blur-sm">
               <Wheat size={25} className="text-brand-300" strokeWidth={1.5} />
             </div>
@@ -70,33 +79,39 @@ export const Login = () => {
             </div>
           </div>
 
-          <p className="mb-5 text-xs font-semibold uppercase tracking-[0.3em] text-brand-300">A family business, built for tomorrow</p>
-          <h1 className="max-w-xl text-5xl font-semibold leading-[1.05] tracking-[-0.04em] text-white xl:text-7xl">
-            Three Brothers.<br />
-            <span className="text-brand-300">One Vision.</span><br />
-            A Smarter Future.
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.3em] text-brand-300">Raj &amp; Brothers ERP</p>
+          <h1 className="max-w-xl text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-white sm:text-5xl xl:text-7xl">
+            Built for Progress.<br />
+            <span className="text-brand-300">Driven by Innovation.</span>
           </h1>
-          <p className="mt-7 max-w-lg text-base leading-7 text-white/75">
-            A family business rooted in hard work, growing through quality, teamwork and smarter operations.
+          <p className="mt-5 max-w-lg text-sm leading-6 text-white/75 sm:mt-7 sm:text-base sm:leading-7">
+            Connecting people, processes and technology for smarter operations.
           </p>
-        </div>
-
-        <div className="relative">
-          <div className="mb-8 grid max-w-3xl grid-cols-3 gap-3 xl:gap-5">
-            {brothers.map((brother) => (
-              <div key={brother.name} className="group rounded-2xl border border-white/15 bg-forest-900/65 p-3 backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-brand-300/60 hover:bg-forest-900/80 xl:p-4">
-                <div className="flex items-center gap-3">
-                  <img src={brother.image} alt={`${brother.name}, ${brother.role}`} className="h-12 w-12 shrink-0 rounded-full border border-brand-300/70 object-cover shadow-inner xl:h-14 xl:w-14" style={{ objectPosition: brother.position }} />
-                  <div className="min-w-0">
-                    <p className="font-serif text-xl italic text-brand-300 xl:text-2xl">{brother.name}</p>
-                    <p className="mt-0.5 text-[10px] leading-4 text-white/70 xl:text-xs">{brother.role}</p>
-                  </div>
-                </div>
+          <div className="mt-6 grid max-w-lg grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
+            {indicators.map(({ label, icon: Icon }) => (
+              <div key={label} className="rounded-xl border border-white/15 bg-forest-900/55 px-2 py-3 backdrop-blur-sm sm:px-3">
+                <Icon size={16} className="mb-2 text-brand-300" strokeWidth={1.8} />
+                <p className="text-[9px] font-medium leading-3 text-white/75 sm:text-[10px] sm:leading-4">{label}</p>
               </div>
             ))}
           </div>
+        </div>
 
-          <div className="flex max-w-3xl items-center justify-between border-t border-white/15 pt-5">
+        <div className="relative">
+          <div className="mb-6 sm:mb-8">
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Leadership</p>
+            <div className="grid max-w-3xl grid-cols-3 gap-2 sm:gap-3 xl:gap-5">
+              {brothers.map((brother) => (
+                <div key={brother.name} className="group rounded-2xl border border-white/15 bg-forest-900/65 p-2 backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-brand-300/60 hover:bg-forest-900/80 sm:p-3 xl:p-4">
+                  <img src={brother.image} alt={`${brother.name}, ${brother.role}`} className="h-20 w-full rounded-xl border border-brand-300/30 object-cover sm:h-24 xl:h-28" style={{ objectPosition: brother.position }} />
+                  <p className="mt-2 font-serif text-base italic text-brand-300 sm:text-xl xl:text-2xl">{brother.name}</p>
+                  <p className="mt-0.5 text-[8px] leading-3 text-white/70 sm:text-[10px] sm:leading-4 xl:text-xs">{brother.role}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="hidden max-w-3xl items-center justify-between border-t border-white/15 pt-5 sm:flex">
             {modules.map(({ label, icon: Icon }) => (
               <div key={label} className="flex flex-col items-center gap-2 text-center text-white/70">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full border border-brand-300/60 bg-forest-900/70 text-brand-300 transition hover:bg-brand-300 hover:text-forest-900">
@@ -118,14 +133,14 @@ export const Login = () => {
             <img src="/Logo_(3).png" alt="Raj & Brothers Rice Bran" className="mx-auto h-24 w-24 object-contain drop-shadow-2xl sm:h-28 sm:w-28" />
             <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Rice Bran Filtration &amp; Processing</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Welcome to Raj &amp; Brothers ERP</h2>
-            <p className="mt-3 text-sm leading-6 text-white/60">Your operations, connected with clarity.</p>
+            <p className="mt-3 text-sm leading-6 text-white/60">Smarter operations. Stronger growth.</p>
           </div>
 
           <div className="rounded-[1.75rem] border border-brand-200/60 bg-[#fffdf7] p-6 text-forest-900 shadow-[0_24px_70px_rgba(0,0,0,.28)] sm:p-8">
             <div className="mb-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-forest-600">Secure access</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-forest-600">Welcome back</p>
               <h3 className="mt-2 text-2xl font-semibold tracking-tight">Sign in to your workspace</h3>
-              <p className="mt-1.5 text-sm leading-6 text-slate-500">Manage every part of your business from one place.</p>
+              <p className="mt-1.5 text-sm leading-6 text-slate-500">Manage your operations, people and business from one secure platform.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -156,16 +171,12 @@ export const Login = () => {
               </button>
             </form>
 
-            <div className="mt-7 flex items-center gap-3 text-center">
-              <span className="h-px flex-1 bg-brand-200" />
-              <p className="font-serif text-sm italic text-forest-700">Three Brothers. One Vision.</p>
-              <span className="h-px flex-1 bg-brand-200" />
-            </div>
-            <p className="mt-2 text-center text-xs font-semibold tracking-wide text-brand-700">A Smarter Future.</p>
+            <p className="mt-2 text-center text-xs font-semibold tracking-wide text-brand-700">Rooted in Trust. Driven by Quality.</p>
+            <p className="mt-1 text-center text-[10px] font-medium tracking-wide text-forest-600">Smarter Operations. Stronger Growth.</p>
           </div>
 
           <p className="mt-6 text-center text-xs text-white/45">Accounts are created by a Super Admin. Contact your administrator for access.</p>
-          <p className="mt-3 text-center text-[10px] font-medium uppercase tracking-[0.2em] text-white/35">© Raj &amp; Brothers ERP Platform</p>
+          <p className="mt-3 text-center text-[10px] font-medium uppercase tracking-[0.16em] text-white/35">© Raj &amp; Brothers ERP Platform. All Rights Reserved.</p>
         </div>
       </section>
     </main>
