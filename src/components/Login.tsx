@@ -15,7 +15,6 @@ import {
   TrendingUp,
   Gauge,
   Users,
-  Wheat,
 } from 'lucide-react';
 
 const industrialImage = 'https://images.pexels.com/photos/2496592/pexels-photo-2496592.jpeg?auto=compress&cs=tinysrgb&h=650&w=940';
@@ -59,19 +58,19 @@ export const Login = () => {
   };
 
   return (
-    <main className="min-h-screen bg-forest-900 text-white lg:grid lg:grid-cols-[minmax(0,1.85fr)_minmax(360px,1fr)]">
+    <main className="min-h-screen bg-forest-900 text-white lg:grid lg:grid-cols-[minmax(0,2.2fr)_minmax(360px,1fr)]">
       <section
         className="relative isolate flex min-h-[430px] flex-col justify-between overflow-hidden bg-forest-900 px-5 py-8 sm:min-h-[520px] sm:p-8 lg:min-h-screen lg:p-10 xl:p-14"
         style={{ backgroundImage: `url(${industrialImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
-        aria-label="Raj and Brothers family business story"
+        aria-label="Raj and Brothers brand and leadership"
       >
         <div className="absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(8,35,21,.96)_0%,rgba(13,57,31,.72)_42%,rgba(8,35,21,.86)_100%)]" />
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_78%_20%,rgba(232,180,74,.18),transparent_30%),linear-gradient(to_top,rgba(5,24,14,.94),transparent_48%)]" />
 
         <div className="relative max-w-2xl">
           <div className="mb-8 flex items-center gap-4 sm:mb-12">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-300/50 bg-forest-900/70 shadow-lg backdrop-blur-sm">
-              <Wheat size={25} className="text-brand-300" strokeWidth={1.5} />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-brand-300/50 bg-forest-900/70 p-2 shadow-lg backdrop-blur-sm">
+              <img src="/Logo_(3).png" alt="Raj & Brothers" className="h-full w-full object-contain" />
             </div>
             <div>
               <p className="text-lg font-semibold tracking-wide text-white">Raj &amp; Brothers</p>
@@ -102,8 +101,11 @@ export const Login = () => {
             <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Leadership</p>
             <div className="grid max-w-3xl grid-cols-3 gap-2 sm:gap-3 xl:gap-5">
               {brothers.map((brother) => (
-                <div key={brother.name} className="group rounded-2xl border border-white/15 bg-forest-900/65 p-2 backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-brand-300/60 hover:bg-forest-900/80 sm:p-3 xl:p-4">
-                  <img src={brother.image} alt={`${brother.name}, ${brother.role}`} className="h-20 w-full rounded-xl border border-brand-300/30 object-cover sm:h-24 xl:h-28" style={{ objectPosition: brother.position }} />
+                <div key={brother.name} className="group overflow-hidden rounded-2xl border border-white/15 bg-forest-900/65 p-2 backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-brand-300/60 hover:bg-forest-900/80 sm:p-3 xl:p-4">
+                  <div className="relative overflow-hidden rounded-xl border border-brand-300/30 bg-forest-900/40">
+                    <img src={brother.image} alt={`${brother.name}, ${brother.role}`} className="h-20 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-24 xl:h-28" style={{ objectPosition: brother.position }} />
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-forest-900/75 to-transparent" />
+                  </div>
                   <p className="mt-2 font-serif text-base italic text-brand-300 sm:text-xl xl:text-2xl">{brother.name}</p>
                   <p className="mt-0.5 text-[8px] leading-3 text-white/70 sm:text-[10px] sm:leading-4 xl:text-xs">{brother.role}</p>
                 </div>
@@ -132,14 +134,14 @@ export const Login = () => {
           <div className="mb-8 text-center">
             <img src="/Logo_(3).png" alt="Raj & Brothers Rice Bran" className="mx-auto h-24 w-24 object-contain drop-shadow-2xl sm:h-28 sm:w-28" />
             <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Rice Bran Filtration &amp; Processing</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Welcome to Raj &amp; Brothers ERP</h2>
-            <p className="mt-3 text-sm leading-6 text-white/60">Smarter operations. Stronger growth.</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Welcome Back</h2>
+            <p className="mt-3 text-sm font-medium leading-6 text-white/75">Sign in to your workspace</p>
           </div>
 
           <div className="rounded-[1.75rem] border border-brand-200/60 bg-[#fffdf7] p-6 text-forest-900 shadow-[0_24px_70px_rgba(0,0,0,.28)] sm:p-8">
             <div className="mb-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-forest-600">Welcome back</p>
-              <h3 className="mt-2 text-2xl font-semibold tracking-tight">Sign in to your workspace</h3>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-forest-600">Secure access</p>
+              <h3 className="mt-2 text-2xl font-semibold tracking-tight">Manage your workspace</h3>
               <p className="mt-1.5 text-sm leading-6 text-slate-500">Manage your operations, people and business from one secure platform.</p>
             </div>
 
