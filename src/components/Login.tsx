@@ -21,10 +21,9 @@ const industrialImage =
   'https://images.pexels.com/photos/2496592/pexels-photo-2496592.jpeg?auto=compress&cs=tinysrgb&h=650&w=940';
 
 const brothers = [
-  // Keep each original portrait matched to the correct name.
-  { name: 'Atul', role: 'Operations Excellence', image: '/02c81547-a589-43a1-bd87-785812fd4dd2.jpg', position: 'center 28%' },
-  { name: 'Vipul', role: 'Technology & Systems', image: '/5f73bbfd-4c54-4acf-b5e1-709302ed13de.jpg', position: 'center 32%' },
-  { name: 'Raj', role: 'Growth & Execution', image: '/c38528f7-261e-4f93-b443-089545ee2c9c.jpg', position: 'center 28%' },
+  { name: 'Atul', role: 'Operations Excellence', image: '/5f73bbfd-4c54-4acf-b5e1-709302ed13de.jpg', position: 'center 28%' },
+  { name: 'Vipul', role: 'Technology & Systems', image: '/c38528f7-261e-4f93-b443-089545ee2c9c.jpg', position: 'center 32%' },
+  { name: 'Raj', role: 'Growth & Execution', image: '/02c81547-a589-43a1-bd87-785812fd4dd2.jpg', position: 'center 28%' },
 ];
 
 const indicators = [
@@ -129,33 +128,9 @@ export const Login = () => {
             {brothers.map((brother) => (
               <article key={brother.name} className="group relative min-w-0 overflow-hidden rounded-xl border border-white/15 bg-gradient-to-b from-[#163c29]/90 via-[#0c2d1e]/90 to-[#071e14]/95 p-1.5 shadow-[0_8px_25px_rgba(0,0,0,0.18)] backdrop-blur-md transition-colors duration-300 hover:border-brand-300/45 sm:rounded-2xl sm:p-2.5 xl:p-3">
                 <div className="relative isolate aspect-[4/3] overflow-hidden rounded-lg bg-[#153b29] sm:rounded-xl">
-                  <img
-                    src={brother.image}
-                    alt={`${brother.name} - ${brother.role}`}
-                    loading="eager"
-                    className="absolute inset-0 h-full w-full object-cover"
-                    style={{
-                      objectPosition: brother.position,
-                      filter: 'saturate(0.88) contrast(1.04)',
-                    }}
-                  />
-                  {/* Forest-green color grade helps the original photo sit naturally in the ERP theme. */}
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 bg-[#0a3825]/20 mix-blend-multiply"
-                  />
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(8,42,28,0.18)_0%,transparent_42%,rgba(7,35,23,0.34)_100%)]"
-                  />
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(5,30,19,0.42)_0%,rgba(5,30,19,0.05)_36%,transparent_68%)]"
-                  />
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-brand-300/20 sm:rounded-xl"
-                  />
+                  <img src={brother.image} alt={`${brother.name} - ${brother.role}`} loading="eager" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: brother.position }} />
+                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(7,35,23,0.02)_35%,rgba(7,35,23,0.10)_65%,rgba(7,35,23,0.45)_100%)]" />
+                  <div aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-white/10 sm:rounded-xl" />
                 </div>
                 <div className="px-0.5 pb-1 pt-2 sm:px-1 sm:pt-2.5">
                   <h2 className="font-serif text-base italic leading-tight text-brand-300 sm:text-xl xl:text-2xl">{brother.name}</h2>
