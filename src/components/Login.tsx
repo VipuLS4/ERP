@@ -60,12 +60,12 @@ export const Login = () => {
   return (
     <main className="min-h-screen bg-forest-900 text-white lg:grid lg:grid-cols-[minmax(0,2.2fr)_minmax(360px,1fr)]">
       <section
-        className="relative isolate flex min-h-[430px] flex-col justify-between overflow-hidden bg-forest-900 px-5 py-8 sm:min-h-[520px] sm:p-8 lg:min-h-screen lg:p-10 xl:p-14"
+        className="relative isolate flex min-h-[430px] flex-col justify-between overflow-hidden bg-forest-900 px-5 py-8 sm:min-h-[520px] sm:p-8 lg:min-h-screen lg:p-10 xl:p-14 2xl:px-16"
         style={{ backgroundImage: `url(${industrialImage})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
         aria-label="Raj and Brothers brand and leadership"
       >
-        <div className="absolute inset-0 -z-10 bg-[linear-gradient(115deg,rgba(8,35,21,.96)_0%,rgba(13,57,31,.72)_42%,rgba(8,35,21,.86)_100%)]" />
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_78%_20%,rgba(232,180,74,.18),transparent_30%),linear-gradient(to_top,rgba(5,24,14,.94),transparent_48%)]" />
+        <div className="absolute inset-0 -z-10 bg-[linear-gradient(110deg,rgba(5,30,18,.9)_0%,rgba(8,42,27,.62)_46%,rgba(7,36,23,.78)_100%)]" />
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_78%_20%,rgba(232,180,74,.2),transparent_28%),linear-gradient(to_top,rgba(5,24,14,.96),transparent_55%)]" />
 
         <div className="relative max-w-2xl">
           <div className="mb-8 flex items-center gap-4 sm:mb-12">
@@ -79,18 +79,20 @@ export const Login = () => {
           </div>
 
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.3em] text-brand-300">Raj &amp; Brothers ERP</p>
-          <h1 className="max-w-xl text-4xl font-semibold leading-[1.05] tracking-[-0.04em] text-white sm:text-5xl xl:text-7xl">
+          <h1 className="max-w-2xl text-4xl font-semibold leading-[1.02] tracking-[-0.045em] text-white sm:text-5xl xl:text-7xl 2xl:text-[5.25rem]">
             Built for Progress.<br />
             <span className="text-brand-300">Driven by Innovation.</span>
           </h1>
           <p className="mt-5 max-w-lg text-sm leading-6 text-white/75 sm:mt-7 sm:text-base sm:leading-7">
             Connecting people, processes and technology for smarter operations.
           </p>
-          <div className="mt-6 grid max-w-lg grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
+          <div className="mt-6 grid max-w-2xl grid-cols-3 gap-2 sm:mt-8 sm:gap-5">
             {indicators.map(({ label, icon: Icon }) => (
-              <div key={label} className="rounded-xl border border-white/15 bg-forest-900/55 px-2 py-3 backdrop-blur-sm sm:px-3">
-                <Icon size={16} className="mb-2 text-brand-300" strokeWidth={1.8} />
-                <p className="text-[9px] font-medium leading-3 text-white/75 sm:text-[10px] sm:leading-4">{label}</p>
+              <div key={label} className="flex items-center gap-2 rounded-xl border border-brand-300/45 bg-forest-900/45 px-2 py-3 backdrop-blur-sm sm:gap-3 sm:px-3 sm:py-3.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-brand-300/70 text-brand-300 sm:h-10 sm:w-10">
+                  <Icon size={17} strokeWidth={1.8} />
+                </div>
+                <p className="text-[9px] font-medium leading-3 text-white/80 sm:text-[10px] sm:leading-4">{label}</p>
               </div>
             ))}
           </div>
@@ -99,24 +101,25 @@ export const Login = () => {
         <div className="relative">
           <div className="mb-6 sm:mb-8">
             <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Leadership</p>
-            <div className="grid max-w-3xl grid-cols-3 gap-2 sm:gap-3 xl:gap-5">
+            <div className="grid max-w-4xl grid-cols-3 gap-2 sm:gap-3 xl:gap-5">
               {brothers.map((brother) => (
                 <div key={brother.name} className="group overflow-hidden rounded-2xl border border-white/15 bg-forest-900/65 p-2 backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-brand-300/60 hover:bg-forest-900/80 sm:p-3 xl:p-4">
-                  <div className="relative overflow-hidden rounded-xl border border-brand-300/30 bg-forest-900/40">
-                    <img src={brother.image} alt={`${brother.name}, ${brother.role}`} className="h-20 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-24 xl:h-28" style={{ objectPosition: brother.position }} />
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-forest-900/75 to-transparent" />
+                  <div className="relative overflow-hidden rounded-xl border border-brand-300/35 bg-forest-900/40">
+                    <img src={brother.image} alt={`${brother.name}, ${brother.role}`} className="h-24 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-32 xl:h-40" style={{ objectPosition: brother.position }} />
+                    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(10,42,27,.08)_35%,rgba(5,30,18,.88)_100%)]" />
                   </div>
-                  <p className="mt-2 font-serif text-base italic text-brand-300 sm:text-xl xl:text-2xl">{brother.name}</p>
-                  <p className="mt-0.5 text-[8px] leading-3 text-white/70 sm:text-[10px] sm:leading-4 xl:text-xs">{brother.role}</p>
+                  <p className="mt-2 font-serif text-lg italic text-brand-300 sm:text-2xl xl:text-3xl">{brother.name}</p>
+                  <p className="mt-0.5 text-[9px] leading-3 text-white/80 sm:text-[10px] sm:leading-4 xl:text-xs">{brother.role}</p>
+                  <span className="mt-2 block h-0.5 w-6 bg-brand-300 sm:mt-3" />
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="hidden max-w-3xl items-center justify-between border-t border-white/15 pt-5 sm:flex">
+          <div className="hidden max-w-4xl items-center justify-between rounded-2xl border border-forest-400/45 bg-forest-900/55 px-4 py-3.5 sm:flex xl:px-8">
             {modules.map(({ label, icon: Icon }) => (
               <div key={label} className="flex flex-col items-center gap-2 text-center text-white/70">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-brand-300/60 bg-forest-900/70 text-brand-300 transition hover:bg-brand-300 hover:text-forest-900">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full border border-brand-300/75 bg-forest-900/70 text-brand-300 transition hover:bg-brand-300 hover:text-forest-900">
                   <Icon size={17} strokeWidth={1.8} />
                 </div>
                 <span className="text-[10px] font-medium tracking-wide">{label}</span>
@@ -126,12 +129,12 @@ export const Login = () => {
         </div>
       </section>
 
-      <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-forest-900 px-5 py-8 sm:px-8 lg:px-10 xl:px-16">
+      <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#082a1c] px-5 py-8 sm:px-8 lg:px-8 xl:px-12 2xl:px-16">
         <div className="absolute -right-28 -top-28 h-80 w-80 rounded-full bg-brand-300/10 blur-3xl" />
         <div className="absolute -bottom-32 -left-28 h-80 w-80 rounded-full bg-forest-500/20 blur-3xl" />
 
         <div className="relative w-full max-w-md">
-          <div className="mb-8 text-center">
+          <div className="mb-7 text-center sm:mb-8">
             <img src="/Logo_(3).png" alt="Raj & Brothers Rice Bran" className="mx-auto h-24 w-24 object-contain drop-shadow-2xl sm:h-28 sm:w-28" />
             <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.3em] text-brand-300">Rice Bran Filtration &amp; Processing</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white sm:text-4xl">Welcome Back</h2>
